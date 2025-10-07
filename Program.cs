@@ -1,4 +1,4 @@
-﻿using BMEStokYonetim.Data;
+using BMEStokYonetim.Data;
 using BMEStokYonetim.Data.Entities;
 using BMEStokYonetim.Services.BackgroundJobs;
 using BMEStokYonetim.Services.Iservice;
@@ -9,14 +9,30 @@ using Quartz;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
-// ✅ 1. DbContext & Factory kaydı (tek ve güvenli yapı)
+<<<<<<< ours
+string? connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    throw new InvalidOperationException("DefaultConnection bağlantı dizesi yapılandırılmamış.");
+}
+
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlServer(connectionString));
+
 builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(connectionString));
+=======
+// ✅ 1. DbContext & Factory kaydı (tek ve güvenli yapı)
+Action<DbContextOptionsBuilder> dbContextOptions = options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
+
+builder.Services.AddDbContext<ApplicationDbContext>(dbContextOptions);
+builder.Services.AddDbContextFactory<ApplicationDbContext>(dbContextOptions);
+>>>>>>> theirs
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 builder.Services.AddHttpContextAccessor();
 
-// ✅ 2. Servis kayıtları
 builder.Services.AddScoped<IStockReportService, StockReportService>();
 builder.Services.AddScoped<IUserContextService, UserContextService>();
 builder.Services.AddScoped<IAssetService, AssetService>();
@@ -28,16 +44,14 @@ builder.Services.AddScoped<IMaintenanceService, MaintenanceService>();
 builder.Services.AddScoped<IRequestService, RequestService>();
 builder.Services.AddScoped<IPurchaseService, PurchaseService>();
 
-// ✅ 3. Logging ayarları
 builder.Services.AddLogging(logging =>
 {
-    _ = logging.ClearProviders();
-    _ = logging.AddConsole();
-    _ = logging.AddDebug();
-    _ = logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
+    logging.ClearProviders();
+    logging.AddConsole();
+    logging.AddDebug();
+    logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
 });
 
-// ✅ 4. Identity konfigürasyonu
 builder.Services.AddDefaultIdentity<ApplicationUser>(options =>
 {
     options.SignIn.RequireConfirmedAccount = false;
@@ -53,14 +67,11 @@ builder.Services.AddDefaultIdentity<ApplicationUser>(options =>
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 
-// ✅ 5. Quartz Job (ReservationJob)
 builder.Services.AddQuartz(q =>
 {
     JobKey jobKey = new("ReservationJob");
-    _ = q.AddJob<ReservationJob>(opts => opts.WithIdentity(jobKey));
-
-    // Her gece 00:05'te çalışır
-    _ = q.AddTrigger(opts => opts
+    q.AddJob<ReservationJob>(opts => opts.WithIdentity(jobKey));
+    q.AddTrigger(opts => opts
         .ForJob(jobKey)
         .WithIdentity("ReservationJob-trigger")
         .WithCronSchedule("0 5 0 * * ?"));
@@ -68,17 +79,13 @@ builder.Services.AddQuartz(q =>
 
 builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 
-// ✅ 6. Kestrel (HTTP)
-builder.WebHost.ConfigureKestrel(options =>
-{
-    options.ListenLocalhost(5000);
-});
-
 WebApplication app = builder.Build();
 
-// ✅ 7. Migration sadece (Seeder yok)
-using (IServiceScope scope = app.Services.CreateScope())
+if (app.Environment.IsDevelopment())
 {
+<<<<<<< ours
+    app.UseMigrationsEndPoint();
+=======
     IDbContextFactory<ApplicationDbContext> factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
     await using ApplicationDbContext db = await factory.CreateDbContextAsync();
     ILogger<Program> logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
@@ -87,28 +94,24 @@ using (IServiceScope scope = app.Services.CreateScope())
     {
         await db.Database.MigrateAsync();
         logger.LogInformation("✅ Database migration completed successfully.");
-        logger.LogInformation($"🔗 Connected DB: {db.Database.GetDbConnection().ConnectionString}");
+        logger.LogInformation("🔗 Connected DB: {Database}", db.Database.GetDbConnection().Database);
     }
     catch (Exception ex)
     {
         logger.LogError(ex, "❌ Migration error: {Message}", ex.Message);
     }
+>>>>>>> theirs
+}
+else
+{
+    app.UseExceptionHandler("/Error");
+    app.UseHsts();
 }
 
-// ✅ 8. Uygulama başladığında log
-IHostApplicationLifetime lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
-lifetime.ApplicationStarted.Register(() =>
+using (IServiceScope scope = app.Services.CreateScope())
 {
-    ILoggerFactory loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
-    ILogger<Program> logger = loggerFactory.CreateLogger<Program>();
-    logger.LogInformation("🚀 Uygulama başlatıldı - Tüm servisler aktif. Quartz Job gece 00:05'te çalışacak.");
-});
-
-// ✅ 9. Middleware pipeline
-if (!app.Environment.IsDevelopment())
-{
-    _ = app.UseExceptionHandler("/Error");
-    _ = app.UseHsts();
+    ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await db.Database.MigrateAsync();
 }
 
 app.UseStaticFiles();

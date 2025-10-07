@@ -33,7 +33,6 @@ namespace BMEStokYonetim.Data.Entities
         // --- Diğer Alanlar ---
         public int RequestedQuantity { get; set; }
         public string? SequenceNo { get; set; }
-        public string? RequestItemNr { get; set; }
         public string? Description { get; set; }
 
         // --- İlişkiler ---

@@ -191,7 +191,7 @@
             .OrderBy(l => l.Name)
             .ToListAsync();
 
-        request.RequestDate = DateTime.Now;
+        request.RequestDate = DateTime.UtcNow;
         request.RequestedByUserId = await userContextService.GetCurrentUserIdAsync();
     }
 
@@ -344,7 +344,7 @@
         // Formu temizle
         request = new Request
         {
-            RequestDate = DateTime.Now,
+            RequestDate = DateTime.UtcNow,
             RequestedByUserId = await userContextService.GetCurrentUserIdAsync()
         };
         selectedLocationId = null;

@@ -111,7 +111,7 @@ else
             qty,
             detail.RequestItem?.TargetWarehouseId ?? 1,
             userId!,
-            $"GR-{DateTime.Now:yyyyMMddHHmm}",
+            $"GR-{DateTime.UtcNow:yyyyMMddHHmm}",
             desc
         );
 

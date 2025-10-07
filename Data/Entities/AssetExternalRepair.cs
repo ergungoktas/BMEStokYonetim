@@ -17,7 +17,7 @@ namespace BMEStokYonetim.Data.Entities
         [StringLength(500)]
         public string? Description { get; set; }
 
-        public DateTime? SentDate { get; set; } = DateTime.Now;
+        public DateTime? SentDate { get; set; } = DateTime.UtcNow;
         public DateTime? ReturnDate { get; set; }
         [StringLength(50)] public string Status { get; set; } = "Sent";
         [Required] public string CreatedByUserId { get; set; } = string.Empty;

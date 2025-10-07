@@ -1,4 +1,4 @@
-﻿using BMEStokYonetim.Data;
+using BMEStokYonetim.Data;
 using BMEStokYonetim.Data.Entities;
 using BMEStokYonetim.Services.Iservice;
 using Microsoft.EntityFrameworkCore;
@@ -17,14 +17,14 @@ namespace BMEStokYonetim.Services.Service
             _userContextService = userContextService;
         }
 
-        // ✅ Talep statüsünü güncelle ve süreci logla
-        public async Task SetRequestItemStatusAsync(
-            int requestItemId,
-            TalepDurumu newStatus,
-            OnayAsamasi approvalStage,
-            string userId,
-            bool log = true)
+        public async Task SetRequestItemStatusAsync(int requestItemId,
+                                                    TalepDurumu newStatus,
+                                                    OnayAsamasi approvalStage,
+                                                    string? userId,
+                                                    bool log = true)
         {
+            string resolvedUserId = ResolveUserId(userId);
+
             await using ApplicationDbContext context = await _contextFactory.CreateDbContextAsync();
             await using IDbContextTransaction transaction = await context.Database.BeginTransactionAsync();
 
@@ -40,21 +40,23 @@ namespace BMEStokYonetim.Services.Service
                 {
                     if (log)
                     {
-                        await LogProcessHistoryAsync("RequestItem", requestItemId, requestItem.Status, requestItem.ApprovalStage, userId);
+                        AddProcessHistory(context, "RequestItem", requestItemId, requestItem.Status, requestItem.ApprovalStage, resolvedUserId);
                     }
+
+                    await context.SaveChangesAsync();
+                    await transaction.CommitAsync();
                     return;
                 }
 
                 requestItem.Status = newStatus;
                 requestItem.ApprovalStage = approvalStage;
 
-                _ = await context.SaveChangesAsync();
-
                 if (log)
                 {
-                    await LogProcessHistoryAsync("RequestItem", requestItemId, newStatus, approvalStage, userId);
+                    AddProcessHistory(context, "RequestItem", requestItemId, newStatus, approvalStage, resolvedUserId);
                 }
 
+                await context.SaveChangesAsync();
                 await transaction.CommitAsync();
             }
             catch
@@ -64,12 +66,19 @@ namespace BMEStokYonetim.Services.Service
             }
         }
 
-        // ✅ Süreç geçmişi kaydı
-        public async Task LogProcessHistoryAsync(string entityType, int entityId,
-                                                TalepDurumu status, OnayAsamasi stage, string userId)
+        public async Task LogProcessHistoryAsync(string entityType,
+                                                 int entityId,
+                                                 TalepDurumu status,
+                                                 OnayAsamasi stage,
+                                                 string? userId)
         {
             await using ApplicationDbContext context = await _contextFactory.CreateDbContextAsync();
+            string resolvedUserId = ResolveUserId(userId);
 
+<<<<<<< ours
+            AddProcessHistory(context, entityType, entityId, status, stage, resolvedUserId);
+            await context.SaveChangesAsync();
+=======
             ProcessHistory history = new()
             {
                 EntityType = entityType,
@@ -77,14 +86,14 @@ namespace BMEStokYonetim.Services.Service
                 Status = status,
                 ApprovalStage = stage,
                 UserId = userId,
-                CreatedAt = DateTime.Now
+                CreatedAt = DateTime.UtcNow
             };
 
             _ = context.ProcessHistories.Add(history);
             _ = await context.SaveChangesAsync();
+>>>>>>> theirs
         }
 
-        // ✅ Belirli varlığın geçmiş kayıtlarını getir
         public async Task<List<ProcessHistory>> GetProcessHistoryAsync(string entityType, int entityId)
         {
             await using ApplicationDbContext context = await _contextFactory.CreateDbContextAsync();
@@ -97,8 +106,7 @@ namespace BMEStokYonetim.Services.Service
                 .ToListAsync();
         }
 
-        // ✅ Üst amir onayı (birim onayı)
-        public async Task ApproveByUnitAsync(int requestItemId, string userId)
+        public async Task ApproveByUnitAsync(int requestItemId, string? userId)
         {
             await using ApplicationDbContext context = await _contextFactory.CreateDbContextAsync();
             RequestItem? item = await context.RequestItems.FirstOrDefaultAsync(i => i.Id == requestItemId);
@@ -115,8 +123,7 @@ namespace BMEStokYonetim.Services.Service
             await SetRequestItemStatusAsync(requestItemId, TalepDurumu.Open, OnayAsamasi.UnitApproved, userId);
         }
 
-        // ✅ Müdür onayı
-        public async Task ApproveByManagementAsync(int requestItemId, string userId)
+        public async Task ApproveByManagementAsync(int requestItemId, string? userId)
         {
             await using ApplicationDbContext context = await _contextFactory.CreateDbContextAsync();
             RequestItem? item = await context.RequestItems.FirstOrDefaultAsync(i => i.Id == requestItemId);
@@ -133,8 +140,7 @@ namespace BMEStokYonetim.Services.Service
             await SetRequestItemStatusAsync(requestItemId, TalepDurumu.Approved, OnayAsamasi.ManagementApproved, userId);
         }
 
-        // ✅ Reddetme
-        public async Task RejectAsync(int requestItemId, string userId)
+        public async Task RejectAsync(int requestItemId, string? userId)
         {
             await using ApplicationDbContext context = await _contextFactory.CreateDbContextAsync();
             RequestItem? item = await context.RequestItems.FirstOrDefaultAsync(i => i.Id == requestItemId);
@@ -151,10 +157,45 @@ namespace BMEStokYonetim.Services.Service
             await SetRequestItemStatusAsync(requestItemId, TalepDurumu.Rejected, OnayAsamasi.Rejected, userId);
         }
 
-        // ✅ Basit log (OnayAsamasi.None)
-        public async Task LogAsync(string entityType, int entityId, TalepDurumu status, string userId)
+        public async Task LogAsync(string entityType, int entityId, TalepDurumu status, string? userId)
         {
             await LogProcessHistoryAsync(entityType, entityId, status, OnayAsamasi.None, userId);
+        }
+
+        private static void AddProcessHistory(ApplicationDbContext context,
+                                              string entityType,
+                                              int entityId,
+                                              TalepDurumu status,
+                                              OnayAsamasi stage,
+                                              string userId)
+        {
+            ProcessHistory history = new()
+            {
+                EntityType = entityType,
+                EntityId = entityId,
+                Status = status,
+                ApprovalStage = stage,
+                UserId = userId,
+                CreatedAt = DateTime.Now
+            };
+
+            context.ProcessHistories.Add(history);
+        }
+
+        private string ResolveUserId(string? userId)
+        {
+            if (!string.IsNullOrWhiteSpace(userId))
+            {
+                return userId;
+            }
+
+            string? resolved = _userContextService.GetUserId();
+            if (string.IsNullOrWhiteSpace(resolved))
+            {
+                throw new InvalidOperationException("Kullanıcı bilgisi alınamadı.");
+            }
+
+            return resolved;
         }
     }
 }

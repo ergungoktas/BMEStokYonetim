@@ -8,7 +8,7 @@ namespace BMEStokYonetim.Data.Entities
     {
         [Key] public int Id { get; set; }
         [Required, StringLength(50)] public string PurchaseNumber { get; set; } = string.Empty;
-        [Required] public DateTime PurchaseDate { get; set; } = DateTime.Now;
+        [Required] public DateTime PurchaseDate { get; set; } = DateTime.UtcNow;
         [StringLength(250)] public string? Description { get; set; }
         [Required] public int LocationId { get; set; }
         [ForeignKey("LocationId")] public virtual Location Location { get; set; } = null!;

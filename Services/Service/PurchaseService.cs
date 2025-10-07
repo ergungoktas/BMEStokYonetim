@@ -23,7 +23,7 @@ namespace BMEStokYonetim.Services.Service
         {
             await using ApplicationDbContext context = await _contextFactory.CreateDbContextAsync();
 
-            purchase.PurchaseDate = DateTime.Now;
+            purchase.PurchaseDate = DateTime.UtcNow;
             purchase.CreatedByUserId = userId;
 
             _ = await context.Purchases.AddAsync(purchase);
@@ -175,7 +175,7 @@ namespace BMEStokYonetim.Services.Service
                 locationCode = locationCode[..3];
             }
 
-            string yearCode = DateTime.Now.ToString("yy");
+            string yearCode = DateTime.UtcNow.ToString("yy");
             string prefix = $"BME-PO-{yearCode}-{locationCode}";
 
             string? lastNumber = await context.Purchases

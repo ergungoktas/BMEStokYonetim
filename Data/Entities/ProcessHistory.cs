@@ -32,6 +32,6 @@ namespace BMEStokYonetim.Data.Entities
 
         // İşlemin tarihi
         [Required]
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }

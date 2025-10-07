@@ -157,7 +157,7 @@
 
         // 🔑 Burada dolduruyoruz ki DataAnnotations validasyonu geçsin
         purchase.CreatedByUserId = currentUserId!;
-        purchase.PurchaseDate = DateTime.Now;
+        purchase.PurchaseDate = DateTime.UtcNow;
 
         locations = await _context.Locations.OrderBy(l => l.Name).ToListAsync();
         products = await _context.Products.Where(p => p.IsActive).OrderBy(p => p.Name).ToListAsync();

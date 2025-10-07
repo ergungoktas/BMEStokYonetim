@@ -23,7 +23,7 @@ namespace BMEStokYonetim.Services.Service
         // -------------------- CREATE AUTO --------------------
         public async Task CreateAutoReservationAsync(int requestItemId, int quantity)
         {
-            using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction = await _context.Database.BeginTransactionAsync();
+            await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction = await _context.Database.BeginTransactionAsync();
             try
             {
                 RequestItem? requestItem = await _context.RequestItems
@@ -53,14 +53,14 @@ namespace BMEStokYonetim.Services.Service
                     Type = ReservationType.Automatic,
                     Status = RezervasyonDurumu.ReservationActive,
                     IsActive = true,
-                    CreatedAt = DateTime.Now
+                    CreatedAt = DateTime.UtcNow
                 };
 
                 _ = _context.StockReservations.Add(reservation);
                 _ = await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                _logger.LogInformation($"[AUTO] Rezervasyon oluşturuldu: {requestItem.Product.Name} - {quantity} adet");
+                _logger.LogInformation("[AUTO] Rezervasyon oluşturuldu: {Product} - {Quantity} adet", requestItem.Product.Name, quantity);
             }
             catch (Exception ex)
             {
@@ -73,7 +73,7 @@ namespace BMEStokYonetim.Services.Service
         // -------------------- CREATE MANUAL --------------------
         public async Task CreateManualReservationAsync(int requestItemId, int quantity, DateOnly expiryDate)
         {
-            using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction = await _context.Database.BeginTransactionAsync();
+            await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction = await _context.Database.BeginTransactionAsync();
             try
             {
                 RequestItem? requestItem = await _context.RequestItems
@@ -102,15 +102,19 @@ namespace BMEStokYonetim.Services.Service
                     Type = ReservationType.Manual,
                     Status = RezervasyonDurumu.ReservationActive,
                     IsActive = true,
-                    CreatedAt = DateTime.Now,
-                    ReleasedAt = expiryDate.ToDateTime(TimeOnly.MaxValue)
+                    CreatedAt = DateTime.UtcNow,
+                    ReleasedAt = DateTime.SpecifyKind(expiryDate.ToDateTime(TimeOnly.MaxValue), DateTimeKind.Utc)
                 };
 
                 _ = _context.StockReservations.Add(reservation);
                 _ = await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                _logger.LogInformation($"[MANUAL] Rezervasyon oluşturuldu: {requestItem.Product.Name} - {quantity} adet (Geçerlilik: {expiryDate:dd.MM.yyyy})");
+                _logger.LogInformation(
+                    "[MANUAL] Rezervasyon oluşturuldu: {Product} - {Quantity} adet (Geçerlilik: {Expiry:dd.MM.yyyy})",
+                    requestItem.Product.Name,
+                    quantity,
+                    expiryDate);
             }
             catch (Exception ex)
             {
@@ -130,17 +134,17 @@ namespace BMEStokYonetim.Services.Service
             {
                 reservation.Status = RezervasyonDurumu.ReservationCompleted;
                 reservation.IsActive = false;
-                reservation.ReleasedAt = DateTime.Now;
+                reservation.ReleasedAt = DateTime.UtcNow;
 
                 _ = await _context.SaveChangesAsync();
-                _logger.LogInformation($"Rezervasyon tamamlandı: #{reservation.Id}");
+                _logger.LogInformation("Rezervasyon tamamlandı: #{ReservationId}", reservation.Id);
             }
         }
 
         // -------------------- CANCEL --------------------
         public async Task CancelReservationAsync(int reservationId)
         {
-            using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction = await _context.Database.BeginTransactionAsync();
+            await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction = await _context.Database.BeginTransactionAsync();
             try
             {
                 StockReservation? reservation = await _context.StockReservations
@@ -158,7 +162,7 @@ namespace BMEStokYonetim.Services.Service
 
                 reservation.Status = RezervasyonDurumu.ReservationCancelled;
                 reservation.IsActive = false;
-                reservation.ReleasedAt = DateTime.Now;
+                reservation.ReleasedAt = DateTime.UtcNow;
 
                 await _warehouseService.ReleaseReservationAsync(
                     reservation.WarehouseId,
@@ -168,7 +172,7 @@ namespace BMEStokYonetim.Services.Service
                 _ = await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                _logger.LogInformation($"Rezervasyon iptal edildi: #{reservation.Id}");
+                _logger.LogInformation("Rezervasyon iptal edildi: #{ReservationId}", reservation.Id);
             }
             catch (Exception ex)
             {
@@ -195,9 +199,9 @@ namespace BMEStokYonetim.Services.Service
         public async Task<ReservationProcessResult> ProcessExpiredReservationsAsync()
         {
             ReservationProcessResult result = new();
-            DateTime today = DateTime.Now;
+            DateTime utcNow = DateTime.UtcNow;
 
-            using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction = await _context.Database.BeginTransactionAsync();
+            await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction = await _context.Database.BeginTransactionAsync();
             try
             {
                 List<StockReservation> expiredReservations = await _context.StockReservations
@@ -206,7 +210,7 @@ namespace BMEStokYonetim.Services.Service
                     .Where(r => r.Status == RezervasyonDurumu.ReservationActive &&
                                 r.Type == ReservationType.Manual &&
                                 r.ReleasedAt != null &&
-                                r.ReleasedAt < today)
+                                r.ReleasedAt < utcNow)
                     .ToListAsync();
 
                 result.TotalProcessed = expiredReservations.Count;
@@ -222,7 +226,7 @@ namespace BMEStokYonetim.Services.Service
                         res.ReservedQuantity);
 
                     result.ExpiredReservations++;
-                    _logger.LogInformation($"Süresi dolan rezervasyon: #{res.Id}");
+                    _logger.LogInformation("Süresi dolan rezervasyon: #{ReservationId}", res.Id);
                 }
 
                 _ = await _context.SaveChangesAsync();

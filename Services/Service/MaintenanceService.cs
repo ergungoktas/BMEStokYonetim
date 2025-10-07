@@ -35,12 +35,12 @@ namespace BMEStokYonetim.Services.Service
 
             if (status == BakimDurumu.MaintenanceInProgress)
             {
-                entity.StartDate = DateTime.Now;
+                entity.StartDate = DateTime.UtcNow;
             }
 
             if (status == BakimDurumu.MaintenanceCompleted)
             {
-                entity.EndDate = DateTime.Now;
+                entity.EndDate = DateTime.UtcNow;
             }
 
             _ = await _context.SaveChangesAsync();
@@ -66,7 +66,7 @@ namespace BMEStokYonetim.Services.Service
                 Quantity = quantity,
                 Unit = product?.Unit ?? ProductUnit.Adet, // ✅ Enum kullanımı
                 MovementType = MovementType.Out,
-                MovementDate = DateTime.Now,
+                MovementDate = DateTime.UtcNow,
                 Description = $"Bakım için stok çıkışı (BakımId={maintenanceId})",
                 UserId = userId,
                 MaintenanceId = maintenanceId,

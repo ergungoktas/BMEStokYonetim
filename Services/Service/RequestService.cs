@@ -75,7 +75,7 @@ namespace BMEStokYonetim.Services.Service
                 locationCode = locationCode[..3];
             }
 
-            string yearCode = DateTime.Now.ToString("yy");
+            string yearCode = DateTime.UtcNow.ToString("yy");
             string prefix = $"BME-TL-{yearCode}-{locationCode}";
 
             string? lastNumber = await _context.Requests
@@ -103,7 +103,7 @@ namespace BMEStokYonetim.Services.Service
             int counter = 1;
             foreach (RequestItem item in request.Items)
             {
-                item.RequestItemNr = $"{request.RequestNumber}-{counter:D2}";
+                item.RequestItemNumber = $"{request.RequestNumber}-{counter:D2}";
                 counter++;
             }
             return Task.CompletedTask;

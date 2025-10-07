@@ -11,7 +11,7 @@ namespace BMEStokYonetim.Data.Entities
         [Required, StringLength(50)] public string RequestNumber { get; set; } = string.Empty;
 
         [Required]
-        public DateTime RequestDate { get; set; } = DateTime.Now;
+        public DateTime RequestDate { get; set; } = DateTime.UtcNow;
 
         [StringLength(500)]
         public string? Description { get; set; }

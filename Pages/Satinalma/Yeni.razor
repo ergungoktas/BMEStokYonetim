@@ -225,7 +225,7 @@
         var purchase = new Purchase
         {
             PurchaseNumber = purchaseNumber,
-            PurchaseDate = DateTime.Now,
+            PurchaseDate = DateTime.UtcNow,
             CreatedByUserId = userId,
             LocationId = selectedLocationId!.Value,
             Description = purchaseDescription ?? string.Empty

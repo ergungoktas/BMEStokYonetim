@@ -1,114 +1,92 @@
-﻿using Quartz;
+<<<<<<< ours
+﻿using BMEStokYonetim.Services.Iservice;
+using Microsoft.Extensions.DependencyInjection;
+=======
+using BMEStokYonetim.Services.Iservice;
+>>>>>>> theirs
+using Microsoft.Extensions.Logging;
+using Quartz;
 
 namespace BMEStokYonetim.Services.BackgroundJobs
 {
+    /// <summary>
+    /// Quartz job responsible for processing expired manual reservations and releasing stock.
+    /// </summary>
     public class ReservationJob : IJob
     {
-        //private readonly ILogger<ReservationJob> _logger;
-        //private readonly IDbContextFactory<ApplicationDbContext> _contextFactory;
+        private readonly ILogger<ReservationJob> _logger;
+<<<<<<< ours
+        private readonly IServiceScopeFactory _scopeFactory;
 
-        //public ReservationJob(ILogger<ReservationJob> logger, IDbContextFactory<ApplicationDbContext> contextFactory)
-        //{
-        //    _logger = logger;
-        //    _contextFactory = contextFactory;
-        //}
-
-        //public async Task Execute(IJobExecutionContext context)
-        //{
-        //    _logger.LogInformation("🔹 Rezervasyon Job çalıştı: {time}", DateTime.Now);
-
-        //    await using ApplicationDbContext db = await _contextFactory.CreateDbContextAsync();
-        //    await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction = await db.Database.BeginTransactionAsync();
-
-        //    try
-        //    {
-        //        DateOnly today = DateOnly.FromDateTime(DateTime.Today);
-
-        //        // 🔹 Süresi dolmuş rezervasyonlar
-        //        List<StockReservation> expiredReservations = await db.StockReservations
-        //            .Include(r => r.Product)
-        //            .Where(r => r.ExpiryDate < today && r.Status == RezervasyonDurumu.ReservationActive)
-        //            .ToListAsync();
-
-        //        if (!expiredReservations.Any())
-        //        {
-        //            _logger.LogInformation("⏳ Süresi dolmuş rezervasyon bulunamadı ({time})", DateTime.Now);
-        //            return;
-        //        }
-
-        //        foreach (StockReservation? res in expiredReservations)
-        //        {
-        //            try
-        //            {
-        //                // 🔹 Stok güncelle
-        //                WarehouseStock? warehouseStock = await db.WarehouseStocks
-        //                    .FirstOrDefaultAsync(ws => ws.WarehouseId == res.WarehouseId && ws.ProductId == res.ProductId);
-
-        //                if (warehouseStock != null)
-        //                {
-        //                    warehouseStock.Quantity += res.Quantity;
-        //                    warehouseStock.LastUpdated = DateTime.Now;
-        //                }
-        //                else
-        //                {
-        //                    _ = db.WarehouseStocks.Add(new WarehouseStock
-        //                    {
-        //                        WarehouseId = res.WarehouseId,
-        //                        ProductId = res.ProductId,
-        //                        Quantity = res.Quantity,
-        //                        LastUpdated = DateTime.Now
-        //                    });
-        //                }
-
-        //                // 🔹 Stok hareketi
-        //                StockMovement movement = new()
-        //                {
-        //                    ProductId = res.ProductId,
-        //                    SourceWarehouseId = res.WarehouseId,
-        //                    Quantity = res.Quantity,
-        //                    MovementType = MovementType.Out, // Enum kullanımı
-        //                    MovementDate = DateTime.Now,
-        //                    Description = $"Rezervasyon süresi dolduğu için otomatik serbest bırakma. RezId={res.Id}",
-        //                    RequestItemId = res.RequestItemId
-        //                };
-        //                _ = db.StockMovements.Add(movement);
-
-        //                // 🔹 Rezervasyon güncelle
-        //                res.Status = RezervasyonDurumu.ReservationExpired;
-
-        //                _logger.LogInformation(
-        //                    "✅ Rezervasyon {resId} süresi doldu. {qty} adet stok serbest bırakıldı.",
-        //                    res.Id, res.Quantity);
-        //            }
-        //            catch (Exception innerEx)
-        //            {
-        //                // 🔹 Tekil rezervasyon hatası job’ı durdurmaz
-        //                _logger.LogWarning(innerEx, "⚠️ Rezervasyon {resId} işlenirken hata oluştu", res.Id);
-        //            }
-        //        }
-
-        //        // 🔹 Tüm değişiklikleri kaydet
-        //        _ = await db.SaveChangesAsync();
-        //        await transaction.CommitAsync();
-
-        //        _logger.LogInformation("🎯 Toplam {count} rezervasyon kapatıldı ve stok serbest bırakıldı.",
-        //            expiredReservations.Count);
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        await transaction.RollbackAsync();
-        //        _logger.LogError(ex, "❌ Rezervasyon job çalışırken hata oluştu");
-        //    }
-        //    finally
-        //    {
-        //        await transaction.DisposeAsync();
-        //        await db.DisposeAsync();
-        //        _logger.LogInformation("🔚 Rezervasyon Job tamamlandı ({time})", DateTime.Now);
-        //    }
-        //}
-        public Task Execute(IJobExecutionContext context)
+        public ReservationJob(ILogger<ReservationJob> logger, IServiceScopeFactory scopeFactory)
         {
-            throw new NotImplementedException();
+            _logger = logger;
+            _scopeFactory = scopeFactory;
+=======
+        private readonly IReservationService _reservationService;
+
+        public ReservationJob(ILogger<ReservationJob> logger, IReservationService reservationService)
+        {
+            _logger = logger;
+            _reservationService = reservationService;
+>>>>>>> theirs
+        }
+
+        public async Task Execute(IJobExecutionContext context)
+        {
+<<<<<<< ours
+            _logger.LogInformation("🔹 Rezervasyon Job çalıştı: {time}", DateTimeOffset.Now);
+
+            await using AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
+            IReservationService reservationService = scope.ServiceProvider.GetRequiredService<IReservationService>();
+
+            try
+            {
+                ReservationProcessResult result = await reservationService.ProcessExpiredReservationsAsync();
+
+                if (result.TotalProcessed == 0)
+                {
+                    _logger.LogInformation("⏳ Süresi dolan rezervasyon bulunamadı ({time})", DateTimeOffset.Now);
+=======
+            DateTimeOffset startedAt = DateTimeOffset.UtcNow;
+            _logger.LogInformation("Reservation job started at {StartedAt:u}", startedAt);
+
+            try
+            {
+                ReservationProcessResult result = await _reservationService.ProcessExpiredReservationsAsync();
+
+                if (result.TotalProcessed == 0)
+                {
+                    _logger.LogInformation(
+                        "Reservation job completed at {CompletedAt:u}. No reservations required processing.",
+                        DateTimeOffset.UtcNow);
+>>>>>>> theirs
+                    return;
+                }
+
+                _logger.LogInformation(
+<<<<<<< ours
+                    "🎯 Rezervasyon jobu tamamlandı. İşlenen: {total}, Süresi Dolan: {expired}. Mesaj: {message}",
+                    result.TotalProcessed,
+                    result.ExpiredReservations,
+                    result.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ Rezervasyon jobu çalıştırılırken hata oluştu.");
+=======
+                    "Reservation job completed at {CompletedAt:u}. Processed {Total} reservations, expired {Expired}. Message: {Message}",
+                    DateTimeOffset.UtcNow,
+                    result.TotalProcessed,
+                    result.ExpiredReservations,
+                    string.IsNullOrWhiteSpace(result.Message) ? "(no details)" : result.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Reservation job failed at {FailedAt:u}", DateTimeOffset.UtcNow);
+>>>>>>> theirs
+                throw;
+            }
         }
     }
 }

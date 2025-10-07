@@ -129,7 +129,7 @@ else
         expiredReservations = await _context.StockReservations.CountAsync(r => r.Status == RezervasyonDurumu.ReservationExpired);
         cancelledReservations = await _context.StockReservations.CountAsync(r => r.Status == RezervasyonDurumu.ReservationCancelled);
 
-        var today = DateTime.Now.Date;
+        var today = DateTime.UtcNow.Date;
         expiringReservations = await _context.StockReservations
             .Include(r => r.Product)
             .Include(r => r.Warehouse)

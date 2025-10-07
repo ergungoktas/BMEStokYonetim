@@ -57,14 +57,14 @@ namespace BMEStokYonetim.Services.Service
                     WarehouseId = warehouseId,
                     ProductId = productId,
                     Quantity = quantity,
-                    LastUpdated = DateTime.Now
+                    LastUpdated = DateTime.UtcNow
                 };
                 _ = _context.WarehouseStocks.Add(stock);
             }
             else
             {
                 stock.Quantity += quantity;
-                stock.LastUpdated = DateTime.Now;
+                stock.LastUpdated = DateTime.UtcNow;
             }
 
             _ = await _context.SaveChangesAsync();
@@ -100,7 +100,7 @@ namespace BMEStokYonetim.Services.Service
 
         public async Task TransferStockAsync(int fromWarehouseId, int toWarehouseId, int productId, int quantity)
         {
-            using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction = await _context.Database.BeginTransactionAsync();
+            await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction = await _context.Database.BeginTransactionAsync();
 
             try
             {

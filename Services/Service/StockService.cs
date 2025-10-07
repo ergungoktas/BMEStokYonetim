@@ -41,7 +41,7 @@ namespace BMEStokYonetim.Services.Service
                 MovementType = MovementType.In,
                 Quantity = quantity,
                 Unit = unit,
-                MovementDate = DateTime.Now,
+                MovementDate = DateTime.UtcNow,
                 Description = desc,
                 DocumentNumber = docNo,
                 TargetWarehouseId = warehouseId,
@@ -59,28 +59,32 @@ namespace BMEStokYonetim.Services.Service
             if (totalReceived < purchaseDetail.Quantity)
             {
                 purchaseDetail.Status = TalepDurumu.PartialDelivery;
-                await _processService.LogProcessHistoryAsync("PurchaseDetail", purchaseDetail.Id, TalepDurumu.PartialDelivery, OnayAsamasi.None, userId);
 
                 if (purchaseDetail.RequestItem != null)
                 {
                     purchaseDetail.RequestItem.Status = TalepDurumu.PartialDelivery;
-                    await _processService.LogProcessHistoryAsync("RequestItem", purchaseDetail.RequestItem.Id, TalepDurumu.PartialDelivery, OnayAsamasi.None, userId);
                 }
             }
             else
             {
                 purchaseDetail.Status = TalepDurumu.Closed;
-                await _processService.LogProcessHistoryAsync("PurchaseDetail", purchaseDetail.Id, TalepDurumu.Closed, OnayAsamasi.None, userId);
 
                 if (purchaseDetail.RequestItem != null)
                 {
                     purchaseDetail.RequestItem.Status = TalepDurumu.Closed;
-                    await _processService.LogProcessHistoryAsync("RequestItem", purchaseDetail.RequestItem.Id, TalepDurumu.Closed, OnayAsamasi.None, userId);
                 }
             }
 
-            await _processService.LogProcessHistoryAsync("StockMovement", movement.Id, TalepDurumu.PurchaseApproved, OnayAsamasi.None, userId);
             _ = await _context.SaveChangesAsync();
+
+            await _processService.LogProcessHistoryAsync("PurchaseDetail", purchaseDetail.Id, purchaseDetail.Status, OnayAsamasi.None, userId);
+
+            if (purchaseDetail.RequestItem != null)
+            {
+                await _processService.LogProcessHistoryAsync("RequestItem", purchaseDetail.RequestItem.Id, purchaseDetail.RequestItem.Status, OnayAsamasi.None, userId);
+            }
+
+            await _processService.LogProcessHistoryAsync("StockMovement", movement.Id, TalepDurumu.PurchaseApproved, OnayAsamasi.None, userId);
         }
 
         // -------------------- BAĞIMSIZ STOK GİRİŞİ --------------------
@@ -101,7 +105,7 @@ namespace BMEStokYonetim.Services.Service
                 MovementType = MovementType.In,
                 Quantity = quantity,
                 Unit = unit,
-                MovementDate = DateTime.Now,
+                MovementDate = DateTime.UtcNow,
                 Description = desc,
                 DocumentNumber = docNo,
                 TargetWarehouseId = mainWarehouse.Id,
@@ -128,7 +132,7 @@ namespace BMEStokYonetim.Services.Service
                 MovementType = MovementType.Out,
                 Quantity = quantity,
                 Unit = unit,
-                MovementDate = DateTime.Now,
+                MovementDate = DateTime.UtcNow,
                 Description = desc,
                 DocumentNumber = docNo,
                 SourceWarehouseId = sourceWarehouseId,
@@ -152,8 +156,8 @@ namespace BMEStokYonetim.Services.Service
                 }
             }
 
-            await _processService.LogProcessHistoryAsync("StockMovement", movement.Id, TalepDurumu.Closed, OnayAsamasi.None, userId);
             _ = await _context.SaveChangesAsync();
+            await _processService.LogProcessHistoryAsync("StockMovement", movement.Id, TalepDurumu.Closed, OnayAsamasi.None, userId);
         }
 
         // -------------------- TRANSFER --------------------
@@ -169,7 +173,7 @@ namespace BMEStokYonetim.Services.Service
                 MovementType = MovementType.Transfer,
                 Quantity = quantity,
                 Unit = unit,
-                MovementDate = DateTime.Now,
+                MovementDate = DateTime.UtcNow,
                 Description = desc,
                 DocumentNumber = docNo,
                 SourceWarehouseId = fromWarehouseId,
@@ -180,8 +184,8 @@ namespace BMEStokYonetim.Services.Service
             _ = _context.StockMovements.Add(movement);
             await _warehouseService.UpdateStockLevelAsync(fromWarehouseId, productId, -quantity);
             await _warehouseService.UpdateStockLevelAsync(toWarehouseId, productId, quantity);
-            await _processService.LogProcessHistoryAsync("StockMovement", movement.Id, TalepDurumu.Closed, OnayAsamasi.None, userId);
             _ = await _context.SaveChangesAsync();
+            await _processService.LogProcessHistoryAsync("StockMovement", movement.Id, TalepDurumu.Closed, OnayAsamasi.None, userId);
         }
 
         // -------------------- MANUEL REZERVASYON --------------------
@@ -195,8 +199,8 @@ namespace BMEStokYonetim.Services.Service
                 Type = ReservationType.Manual,
                 Status = RezervasyonDurumu.ReservationActive,
                 IsActive = true,
-                CreatedAt = DateTime.Now,
-                ReleasedAt = DateTime.Now.AddDays(1)
+                CreatedAt = DateTime.UtcNow,
+                ReleasedAt = DateTime.UtcNow.AddDays(1)
             };
 
             _ = _context.StockReservations.Add(reservation);
@@ -219,7 +223,7 @@ namespace BMEStokYonetim.Services.Service
 
             res.IsActive = false;
             res.Status = RezervasyonDurumu.ReservationCancelled;
-            res.ReleasedAt = DateTime.Now;
+            res.ReleasedAt = DateTime.UtcNow;
 
             _ = await _context.SaveChangesAsync();
         }

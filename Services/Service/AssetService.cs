@@ -25,7 +25,7 @@ namespace BMEStokYonetim.Services.Service
 
                 UserId = userId,
                 Notes = notes,
-                LogDate = DateTime.Now
+                LogDate = DateTime.UtcNow
             };
 
             _ = _context.AssetUsageLogs.Add(usage);
@@ -40,7 +40,7 @@ namespace BMEStokYonetim.Services.Service
                 AssetId = assetId,
                 CompanyName = companyName,      // ✅ Entity alanı
                 Description = description,
-                SentDate = DateTime.Now,        // ✅ Entity alanı
+                SentDate = DateTime.UtcNow,        // ✅ Entity alanı
                 CreatedByUserId = userId,       // ✅ Entity alanı
                 Status = "Sent"
             };
@@ -58,7 +58,7 @@ namespace BMEStokYonetim.Services.Service
                 throw new InvalidOperationException("Kayıt bulunamadı.");
             }
 
-            repair.ReturnDate = DateTime.Now;
+            repair.ReturnDate = DateTime.UtcNow;
             repair.Status = "Returned";
             repair.CreatedByUserId = userId;   // ✅ Kullanıcı güncellemesi
 
