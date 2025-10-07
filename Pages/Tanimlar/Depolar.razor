@@ -1,0 +1,169 @@
+﻿@page "/tanimlar/depolar"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@inject NavigationManager Navigation
+@inject ApplicationDbContext _context
+
+<h3>Depo Yönetimi</h3>
+
+<EditForm Model="@model" OnValidSubmit="HandleValidSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="mb-3">
+        <label class="form-label">Lokasyon</label>
+        <InputSelect class="form-select" @bind-Value="selectedLocationId">
+            <option value="">Seçiniz</option>
+            @foreach (var lok in lokasyonlar)
+            {
+                <option value="@lok.Id">@lok.Name</option>
+            }
+        </InputSelect>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Depo Kodu</label>
+        <InputText class="form-control" @bind-Value="model.Code" readonly />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Depo Adı</label>
+        <InputText class="form-control" @bind-Value="model.Name" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Depo Tipi</label>
+        <InputSelect class="form-select" @bind-Value="model.Type">
+            @foreach (var value in Enum.GetValues(typeof(WarehouseType)))
+            {
+                <option value="@value">@value</option>
+            }
+        </InputSelect>
+    </div>
+
+    <button type="submit" class="btn btn-success">@((model.Id == 0) ? "Kaydet" : "Güncelle")</button>
+</EditForm>
+
+<hr />
+
+<h5>Mevcut Depolar</h5>
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Kod</th>
+            <th>Ad</th>
+            <th>Tip</th>
+            <th>Lokasyon</th>
+            <th>İşlem</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var depo in depolar)
+        {
+            <tr>
+                <td>@depo.Code</td>
+                <td>@depo.Name</td>
+                <td>@depo.Type</td>
+                <td>@depo.Location?.Name</td>
+                <td>
+                    <button class="btn btn-sm btn-primary" @onclick="() => EditWarehouse(depo)">Düzenle</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private Warehouse model = new();
+    private List<Location> lokasyonlar = new();
+    private List<Warehouse> depolar = new();
+
+    private int? selectedLocationId
+    {
+        get => model.LocationId;
+        set
+        {
+            if (model.LocationId != value)
+            {
+                model.LocationId = value;
+                _ = GenerateCodeFromLocation();
+            }
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        lokasyonlar = await _context.Locations.OrderBy(l => l.Name).ToListAsync();
+        await LoadDepolar();
+    }
+
+    private async Task GenerateCodeFromLocation()
+    {
+        if (model.Id > 0) return; // düzenleme modundaysa yeni kod üretme
+        if (model.LocationId == null) return;
+
+        var lokasyon = lokasyonlar.FirstOrDefault(l => l.Id == model.LocationId);
+        if (lokasyon == null) return;
+
+        string kodPrefix = "BME-" + new string(lokasyon.Name
+            .Where(char.IsLetter)
+            .Take(3)
+            .ToArray()).ToUpper();
+
+        var benzerKodlar = await _context.Warehouses
+            .Where(w => w.Code.StartsWith(kodPrefix))
+            .Select(w => w.Code)
+            .ToListAsync();
+
+        int maxSayi = 0;
+        foreach (var kod in benzerKodlar)
+        {
+            var parca = kod.Split('-').LastOrDefault();
+            if (int.TryParse(parca, out int sayi) && sayi > maxSayi)
+                maxSayi = sayi;
+        }
+
+        string yeniKod = $"{kodPrefix}-{(maxSayi + 1):D3}";
+        model.Code = yeniKod;
+        StateHasChanged();
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        if (model.Id == 0)
+        {
+            _context.Warehouses.Add(model);
+        }
+        else
+        {
+            _context.Warehouses.Update(model);
+        }
+
+        await _context.SaveChangesAsync();
+        model = new Warehouse();
+        await LoadDepolar();
+        StateHasChanged();
+    }
+
+    private async Task LoadDepolar()
+    {
+        depolar = await _context.Warehouses
+            .Include(w => w.Location)
+            .OrderBy(w => w.Code)
+            .ToListAsync();
+    }
+
+    private void EditWarehouse(Warehouse depo)
+    {
+        model = new Warehouse
+        {
+            Id = depo.Id,
+            Code = depo.Code,
+            Name = depo.Name,
+            Type = depo.Type,
+            LocationId = depo.LocationId
+        };
+    }
+}

@@ -1,0 +1,168 @@
+﻿@page "/kullanici-yonetimi"
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using System.ComponentModel.DataAnnotations
+@inject UserManager<ApplicationUser> UserManager
+@inject RoleManager<IdentityRole> RoleManager
+@inject NavigationManager Navigation
+
+<h3>Kullanıcı Yönetimi</h3>
+
+<!-- Kullanıcı Oluşturma -->
+<EditForm Model="newUser" OnValidSubmit="CreateUser">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="row mb-3">
+        <div class="col">
+            <InputText class="form-control" @bind-Value="newUser.FullName" placeholder="Ad Soyad" />
+        </div>
+        <div class="col">
+            <InputText class="form-control" @bind-Value="newUser.Email" placeholder="Email" />
+        </div>
+        <div class="col">
+            <InputText class="form-control" @bind-Value="newUser.Password" placeholder="Şifre" type="password" />
+        </div>
+        <div class="col">
+            <InputSelect class="form-select" @bind-Value="newUser.Role">
+                <option value="">Rol Seçiniz</option>
+                @foreach (var role in roles)
+                {
+                    <option value="@role">@role</option>
+                }
+            </InputSelect>
+        </div>
+        <div class="col-auto">
+            <button class="btn btn-primary" type="submit">Oluştur</button>
+        </div>
+    </div>
+</EditForm>
+
+<hr />
+
+<!-- Kullanıcı Listesi -->
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Ad Soyad</th>
+            <th>Email</th>
+            <th>Rol</th>
+            <th>Yeni Şifre</th>
+            <th>İşlem</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var user in users)
+        {
+            <tr>
+                <td>@user.FullName</td>
+                <td>@user.Email</td>
+                <td>
+                    <InputSelect class="form-select" @bind-Value="user.Role" @onchange="(e) => UpdateUserRole(user)">
+                        @foreach (var role in roles)
+                        {
+                            <option value="@role">@role</option>
+                        }
+                    </InputSelect>
+                </td>
+                <td>
+                    <InputText class="form-control" @bind-Value="user.NewPassword" placeholder="Yeni Şifre" type="password" />
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-warning" @onclick="() => ChangePassword(user)">Şifreyi Değiştir</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private List<string> roles = new();
+    private List<UserViewModel> users = new();
+    private NewUserModel newUser = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        roles = await RoleManager.Roles.Select(r => r.Name!).ToListAsync();
+
+        var appUsers = await UserManager.Users.ToListAsync();
+        users = new();
+
+        foreach (var u in appUsers)
+        {
+            var userRoles = await UserManager.GetRolesAsync(u);
+            users.Add(new UserViewModel
+            {
+                Id = u.Id,
+                FullName = u.FullName,
+                Email = u.Email,
+                Role = userRoles.FirstOrDefault() ?? "",
+            });
+        }
+    }
+
+    private async Task CreateUser()
+    {
+        var user = new ApplicationUser
+        {
+            UserName = newUser.Email,
+            Email = newUser.Email,
+            FullName = newUser.FullName,
+            IsActive = true
+        };
+
+        var result = await UserManager.CreateAsync(user, newUser.Password);
+
+        if (result.Succeeded && !string.IsNullOrWhiteSpace(newUser.Role))
+        {
+            await UserManager.AddToRoleAsync(user, newUser.Role);
+            Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
+        }
+    }
+
+    private async Task UpdateUserRole(UserViewModel user)
+    {
+        var appUser = await UserManager.FindByIdAsync(user.Id);
+        if (appUser == null) return;
+
+        var currentRoles = await UserManager.GetRolesAsync(appUser);
+        await UserManager.RemoveFromRolesAsync(appUser, currentRoles);
+        await UserManager.AddToRoleAsync(appUser, user.Role);
+    }
+
+    private async Task ChangePassword(UserViewModel user)
+    {
+        if (string.IsNullOrWhiteSpace(user.NewPassword)) return;
+
+        var appUser = await UserManager.FindByIdAsync(user.Id);
+        if (appUser == null) return;
+
+        var token = await UserManager.GeneratePasswordResetTokenAsync(appUser);
+        await UserManager.ResetPasswordAsync(appUser, token, user.NewPassword);
+
+        user.NewPassword = ""; // temizle
+    }
+
+    private class NewUserModel
+    {
+        [Required]
+        public string FullName { get; set; } = string.Empty;
+        [Required, EmailAddress]
+        public string Email { get; set; } = string.Empty;
+        [Required, MinLength(6)]
+        public string Password { get; set; } = string.Empty;
+        public string Role { get; set; } = string.Empty;
+    }
+
+    private class UserViewModel
+    {
+        public string Id { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Role { get; set; } = string.Empty;
+        public string NewPassword { get; set; } = string.Empty;
+    }
+}

@@ -1,0 +1,280 @@
+﻿@page "/stok/cikis"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Helpers
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@using System.ComponentModel.DataAnnotations
+@inject ApplicationDbContext _context
+
+<PageTitle>Stok Çıkışı</PageTitle>
+
+<h4>Stok Çıkışı</h4>
+
+@if (isLoading)
+{
+    <p><em>Yükleniyor...</em></p>
+}
+else
+{
+    if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    }
+
+    if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <div class="alert alert-success">@successMessage</div>
+    }
+
+    if (editContext is not null)
+    {
+        <EditForm EditContext="editContext" OnValidSubmit="HandleValidSubmit">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Ürün</label>
+                    <InputSelect class="form-select"
+                                 TValue="int?"
+                                 Value="model.ProductId"
+                                 ValueChanged="OnProductChanged"
+                                 ValueExpression="() => model.ProductId">
+                        <option value="">Ürün seçiniz</option>
+                        @foreach (var product in products)
+                        {
+                            <option value="@product.Id">@product.Code - @product.Name</option>
+                        }
+                    </InputSelect>
+                    <ValidationMessage For="() => model.ProductId" />
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Miktar</label>
+                    <InputNumber class="form-control" @bind-Value="model.Quantity" />
+                    <ValidationMessage For="() => model.Quantity" />
+                </div>
+
+                <div class="col-md-3">
+                    <label class="form-label">Birim</label>
+                    <InputText class="form-control" Value="@model.UnitText" readonly />
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Çıkış Lokasyonu</label>
+                    <InputSelect class="form-select"
+                                 TValue="int?"
+                                 Value="model.SourceLocationId"
+                                 ValueChanged="OnSourceLocationChanged"
+                                 ValueExpression="() => model.SourceLocationId">
+                        <option value="">Lokasyon seçiniz</option>
+                        @foreach (var location in locations)
+                        {
+                            <option value="@location.Id">@location.Name</option>
+                        }
+                    </InputSelect>
+                    <ValidationMessage For="() => model.SourceLocationId" />
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Hedef Lokasyon</label>
+                    <InputSelect class="form-select"
+                                 TValue="int?"
+                                 Value="model.TargetLocationId"
+                                 ValueChanged="OnTargetLocationChanged"
+                                 ValueExpression="() => model.TargetLocationId">
+                        <option value="">Lokasyon seçiniz</option>
+                        @foreach (var location in locations)
+                        {
+                            <option value="@location.Id">@location.Name</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">İşlem Tarihi</label>
+                    <InputDate class="form-control" @bind-Value="model.MovementDate" />
+                </div>
+
+                <div class="col-md-4">
+                    <div class="form-check mt-4">
+                        <InputCheckbox class="form-check-input" @bind-Value="model.IsUrgent" />
+                        <label class="form-check-label">Acil Çıkış</label>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Evrak No</label>
+                    <InputText class="form-control" @bind-Value="model.DocumentNumber" />
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label">Açıklama</label>
+                    <InputTextArea class="form-control" @bind-Value="model.Description" rows="3" />
+                </div>
+            </div>
+
+            <div class="mt-4 d-flex gap-2">
+                <button class="btn btn-primary" type="submit" disabled="@isSubmitting">Kaydet</button>
+                <button class="btn btn-secondary" type="button" @onclick="ResetForm" disabled="@isSubmitting">Temizle</button>
+            </div>
+        </EditForm>
+    }
+    else
+    {
+        <div class="alert alert-danger">Form başlatılamadı.</div>
+    }
+}
+
+@code {
+    private readonly List<Product> products = new();
+    private readonly List<Location> locations = new();
+
+    private StockExitModel model = new();
+    private EditContext? editContext;
+    private bool isLoading = true;
+    private bool isSubmitting;
+    private string? successMessage;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLookupsAsync();
+
+        ResetModel();
+        editContext = new EditContext(model);
+        isLoading = false;
+    }
+
+    private async Task LoadLookupsAsync()
+    {
+        var productList = await _context.Products.AsNoTracking().OrderBy(p => p.Name).ToListAsync();
+        var locationList = await _context.Locations.AsNoTracking().OrderBy(l => l.Name).ToListAsync();
+
+        products.Clear(); products.AddRange(productList);
+        locations.Clear(); locations.AddRange(locationList);
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        errorMessage = null;
+        successMessage = null;
+
+        if (!model.ProductId.HasValue || !model.SourceLocationId.HasValue)
+        {
+            errorMessage = "Ürün ve çıkış lokasyonu seçilmelidir.";
+            return;
+        }
+
+        isSubmitting = true;
+
+        try
+        {
+            var entity = new StockMovement
+            {
+                ProductId = model.ProductId.Value,
+                MovementType = MovementType.Out,   // ✅ enum
+                Quantity = model.Quantity,
+                Unit = model.Unit,                 // ✅ enum kaydediliyor
+                MovementDate = model.MovementDate,
+                Description = model.Description,
+                DocumentNumber = model.DocumentNumber,
+                SourceLocationId = model.SourceLocationId.Value,
+                TargetLocationId = model.TargetLocationId,
+                IsUrgent = model.IsUrgent
+            };
+
+            _context.StockMovements.Add(entity);
+            await _context.SaveChangesAsync();
+
+            successMessage = "Stok çıkışı başarıyla kaydedildi.";
+            ResetModel();
+            editContext = new EditContext(model);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Stok çıkışı kaydedilirken hata: {ex.Message}";
+            Console.Error.WriteLine(ex);
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private Task OnProductChanged(int? productId)
+    {
+        model.ProductId = productId;
+
+        if (productId.HasValue)
+        {
+            var product = products.FirstOrDefault(p => p.Id == productId.Value);
+            if (product != null)
+                model.Unit = product.Unit; // ✅ Enum set ediliyor
+        }
+        else
+        {
+            model.Unit = default;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task OnSourceLocationChanged(int? locationId)
+    {
+        model.SourceLocationId = locationId;
+        return Task.CompletedTask;
+    }
+
+    private Task OnTargetLocationChanged(int? locationId)
+    {
+        model.TargetLocationId = locationId;
+        return Task.CompletedTask;
+    }
+
+    private void ResetForm()
+    {
+        ResetModel();
+        editContext = new EditContext(model);
+        successMessage = null;
+        errorMessage = null;
+    }
+
+    private void ResetModel()
+    {
+        model = new StockExitModel
+        {
+            MovementDate = DateTime.Today,
+            Quantity = 1
+        };
+    }
+
+    private class StockExitModel
+    {
+        [Required(ErrorMessage = "Ürün seçiniz.")]
+        public int? ProductId { get; set; }
+
+        [Range(1, int.MaxValue, ErrorMessage = "Miktar 1 veya daha büyük olmalıdır.")]
+        public int Quantity { get; set; }
+
+        public ProductUnit Unit { get; set; }   // ✅ Enum
+
+        public string UnitText => Unit.GetDescription(); // ekranda gösterim
+
+        [Required(ErrorMessage = "Çıkış lokasyonu seçiniz.")]
+        public int? SourceLocationId { get; set; }
+
+        public int? TargetLocationId { get; set; }
+
+        public DateTime MovementDate { get; set; } = DateTime.Today;
+
+        public bool IsUrgent { get; set; }
+
+        [StringLength(50)]
+        public string? DocumentNumber { get; set; }
+
+        [StringLength(500)]
+        public string? Description { get; set; }
+    }
+}

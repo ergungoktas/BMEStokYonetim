@@ -1,0 +1,84 @@
+﻿@page "/history"
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Services.Iservice
+@using Microsoft.AspNetCore.Components.Forms
+@inject IProcessService processService
+
+<h3 class="mb-3">🕒 Süreç Geçmişi</h3>
+
+<div class="card p-3 mb-4">
+    <div class="row g-2">
+        <div class="col-md-4">
+            <label class="form-label">Varlık Tipi (EntityType)</label>
+            <InputText class="form-control" @bind-Value="entityType" placeholder="Örn: RequestItem veya PurchaseDetail" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Varlık ID</label>
+            <InputNumber class="form-control" @bind-Value="entityId" placeholder="ID" />
+        </div>
+        <div class="col-md-3 d-flex align-items-end">
+            <button class="btn btn-primary" @onclick="LoadHistory">Geçmişi Getir</button>
+        </div>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <div class="alert alert-info">Yükleniyor...</div>
+}
+else if (!histories.Any())
+{
+    <div class="alert alert-warning">Kayıt bulunamadı.</div>
+}
+else
+{
+    <table class="table table-striped align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>#</th>
+                <th>Varlık Tipi</th>
+                <th>Durum</th>
+                <th>Onay Aşaması</th>
+                <th>Kullanıcı</th>
+                <th>Tarih</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var h in histories)
+            {
+                <tr>
+                    <td>@h.Id</td>
+                    <td>@h.EntityType</td>
+                    <td>@GetEnumDescription(h.Status)</td>
+                    <td>@GetEnumDescription(h.ApprovalStage)</td>
+                    <td>@h.User?.FullName</td>
+                    <td>@h.CreatedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private string entityType = "RequestItem";  // varsayılan
+    private int entityId;
+    private bool isLoading = false;
+    private List<ProcessHistory> histories = new();
+
+    private async Task LoadHistory()
+    {
+        if (string.IsNullOrWhiteSpace(entityType) || entityId <= 0)
+            return;
+
+        isLoading = true;
+        histories = await processService.GetProcessHistoryAsync(entityType, entityId);
+        isLoading = false;
+    }
+
+    private static string GetEnumDescription(Enum value)
+    {
+        var field = value.GetType().GetField(value.ToString());
+        var attr = (System.ComponentModel.DescriptionAttribute?)Attribute.GetCustomAttribute(field!, typeof(System.ComponentModel.DescriptionAttribute));
+        return attr?.Description ?? value.ToString();
+    }
+}

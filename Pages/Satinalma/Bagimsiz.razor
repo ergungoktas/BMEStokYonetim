@@ -1,0 +1,256 @@
+﻿@page "/satinalma/yeni-bagimsiz"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Services.Iservice
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@using System.ComponentModel
+@inject ApplicationDbContext _context
+@inject IPurchaseService purchaseService
+@inject IUserContextService userContextService
+@inject NavigationManager Navigation
+
+<h3>Yeni Satınalma (Bağımsız)</h3>
+
+@if (!string.IsNullOrWhiteSpace(formError))
+{
+    <div class="alert alert-danger">@formError</div>
+}
+
+<EditForm Model="@purchase" OnValidSubmit="HandleValidSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="row g-3">
+        <div class="col-md-4">
+            <label class="form-label">Lokasyon</label>
+            <select class="form-select" @onchange="OnLocationChanged">
+                <option value="">Lokasyon Seçiniz</option>
+                @foreach (var loc in locations)
+                {
+                    <option value="@loc.Id">@loc.Name</option>
+                }
+            </select>
+        </div>
+
+        <div class="col-md-4">
+            <label class="form-label">Satınalma No</label>
+            <InputText class="form-control" @bind-Value="purchase.PurchaseNumber" disabled />
+        </div>
+
+        <div class="col-md-4">
+            <label class="form-label">Açıklama</label>
+            <InputText class="form-control" @bind-Value="purchase.Description" />
+        </div>
+    </div>
+
+    <hr />
+
+    <h5>Satınalma Kalemleri</h5>
+
+    <table class="table table-striped align-middle">
+        <thead>
+            <tr>
+                <th>Ürün</th>
+                <th>Tedarikçi</th>
+                <th>Miktar</th>
+                <th>Birim Fiyat</th>
+                <th>Para Birimi</th>
+                <th>Toplam</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in purchaseDetails)
+            {
+                <tr>
+                    <td>@item.Product?.Name</td>
+                    <td>@item.Supplier?.CompanyName</td>
+                    <td>@item.Quantity</td>
+                    <td>@item.UnitPrice:N2</td>
+                    <td>@GetEnumDescription(item.Currency)</td>
+                    <td>@item.TotalPrice:N2</td>
+                    <td>
+                        <button type="button" class="btn btn-danger btn-sm" @onclick="() => RemoveDetail(item)">Sil</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <div class="card p-3">
+        <h6>Yeni Kalem Ekle</h6>
+        <div class="row g-2">
+            <div class="col-md-3">
+                <InputSelect class="form-select" @bind-Value="newProductId">
+                    <option value="">Ürün Seç</option>
+                    @foreach (var p in products)
+                    {
+                        <option value="@p.Id">@p.Name</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="col-md-3">
+                <InputSelect class="form-select" @bind-Value="newSupplierId">
+                    <option value="">Tedarikçi Seç</option>
+                    @foreach (var s in suppliers)
+                    {
+                        <option value="@s.Id">@s.CompanyName</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="col-md-1">
+                <InputNumber class="form-control" @bind-Value="newQuantity" placeholder="Miktar" />
+            </div>
+            <div class="col-md-2">
+                <InputNumber class="form-control" @bind-Value="newUnitPrice" placeholder="Birim Fiyat" />
+            </div>
+            <div class="col-md-2">
+                <InputSelect class="form-select" @bind-Value="newCurrency">
+                    @foreach (var c in Enum.GetValues(typeof(CurrencyType)).Cast<CurrencyType>())
+                    {
+                        <option value="@c">@GetEnumDescription(c)</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="col-md-1 d-grid">
+                <button type="button" class="btn btn-primary" @onclick="AddDetail">Ekle</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-3 d-flex gap-2">
+        <button type="submit" class="btn btn-success" disabled="@isBlocked">Kaydet</button>
+        <button type="button" class="btn btn-secondary" @onclick="Cancel">İptal</button>
+    </div>
+</EditForm>
+
+@code {
+    private Purchase purchase = new();
+    private List<PurchaseDetail> purchaseDetails = new();
+
+    private List<Location> locations = new();
+    private List<Product> products = new();
+    private List<Supplier> suppliers = new();
+
+    private int? newProductId;
+    private int? newSupplierId;
+    private int newQuantity;
+    private decimal newUnitPrice;
+    private CurrencyType newCurrency = CurrencyType.TRY;
+
+    private int? selectedLocationId;
+    private string? currentUserId;
+    private string? formError;
+    private bool isBlocked = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUserId = await userContextService.GetCurrentUserIdAsync();
+
+        if (string.IsNullOrWhiteSpace(currentUserId))
+        {
+            formError = "Oturum bulunamadı. Lütfen tekrar giriş yapınız.";
+            isBlocked = true;
+            return;
+        }
+
+        // 🔑 Burada dolduruyoruz ki DataAnnotations validasyonu geçsin
+        purchase.CreatedByUserId = currentUserId!;
+        purchase.PurchaseDate = DateTime.Now;
+
+        locations = await _context.Locations.OrderBy(l => l.Name).ToListAsync();
+        products = await _context.Products.Where(p => p.IsActive).OrderBy(p => p.Name).ToListAsync();
+        suppliers = await _context.Suppliers.OrderBy(s => s.CompanyName).ToListAsync();
+    }
+
+    private async Task OnLocationChanged(ChangeEventArgs e)
+    {
+        formError = null;
+        purchase.PurchaseNumber = string.Empty;
+
+        if (int.TryParse(e.Value?.ToString(), out int locId))
+        {
+            selectedLocationId = locId;
+            purchase.LocationId = locId;
+
+            purchase.PurchaseNumber = await purchaseService.GeneratePurchaseNumberAsync(locId);
+        }
+        else
+        {
+            selectedLocationId = null;
+        }
+    }
+
+    private void AddDetail()
+    {
+        if (newProductId == null || newSupplierId == null || newQuantity <= 0 || newUnitPrice <= 0)
+        {
+            formError = "Lütfen tüm kalem alanlarını doldurunuz.";
+            return;
+        }
+
+        var product = products.FirstOrDefault(p => p.Id == newProductId);
+        var supplier = suppliers.FirstOrDefault(s => s.Id == newSupplierId);
+
+        if (product == null || supplier == null) return;
+
+        purchaseDetails.Add(new PurchaseDetail
+        {
+            ProductId = product.Id,
+            Product = product,
+            SupplierId = supplier.Id,
+            Supplier = supplier,
+            Quantity = newQuantity,
+            UnitPrice = newUnitPrice,
+            Currency = newCurrency,
+            Status = TalepDurumu.PurchasePending
+        });
+
+        newProductId = null;
+        newSupplierId = null;
+        newQuantity = 0;
+        newUnitPrice = 0;
+        newCurrency = CurrencyType.TRY;
+    }
+
+    private void RemoveDetail(PurchaseDetail item)
+    {
+        purchaseDetails.Remove(item);
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        if (isBlocked) return;
+
+        if (selectedLocationId == null)
+        {
+            formError = "Lütfen lokasyon seçiniz.";
+            return;
+        }
+
+        if (!purchaseDetails.Any())
+        {
+            formError = "En az bir satınalma kalemi ekleyiniz.";
+            return;
+        }
+
+        // Güvence (normalde gerek yok, ama null olursa yine dolduralım)
+        purchase.CreatedByUserId = currentUserId!;
+
+        var saved = await purchaseService.CreatePurchaseAsync(purchase, purchaseDetails, currentUserId!);
+        Navigation.NavigateTo("/satinalma/liste");
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/satinalma/liste");
+    }
+
+    private static string GetEnumDescription(Enum value)
+    {
+        var field = value.GetType().GetField(value.ToString());
+        var attr = (DescriptionAttribute?)Attribute.GetCustomAttribute(field!, typeof(DescriptionAttribute));
+        return attr?.Description ?? value.ToString();
+    }
+}

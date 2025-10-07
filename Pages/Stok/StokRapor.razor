@@ -1,0 +1,141 @@
+﻿@page "/stock-report"
+@using BMEStokYonetim.Services
+@using BMEStokYonetim.Models
+@using BMEStokYonetim.Services.Service
+@inject IStockReportService StockService
+
+<h3>Stok Raporu</h3>
+
+@if (loading)
+{
+    <div class="text-center">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Yükleniyor...</span>
+        </div>
+        <p>Yükleniyor...</p>
+    </div>
+}
+else
+{
+    <!-- Özet Bilgiler -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Toplam Ürün</h5>
+                    <p class="card-text display-6 text-primary">@summary.TotalProducts</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Toplam Stok Miktarı</h5>
+                    <p class="card-text display-6 text-success">@summary.TotalItemsInStock</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Düşük Stoklu Ürünler</h5>
+                    <p class="card-text display-6 text-warning">@summary.LowStockItems</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stok Listesi -->
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>Ürün Kodu</th>
+                    <th>Ürün Adı</th>
+                    <th>Kategori</th>
+                    <th>Marka</th>
+                    <th>Birim</th>
+                    <th>Mevcut Stok</th>
+                    <th>Min Stok</th>
+                    <th>Durum</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var product in products)
+                {
+                    <tr>
+                        <td>@product.ProductCode</td>
+                        <td>@product.ProductName</td>
+                        <td>@product.CategoryName</td>
+                        <td>@product.Brand</td>
+                        <td>@product.Unit</td>
+                        <td>@product.CurrentStock</td>
+                        <td>@(product.MinStock.HasValue? product.MinStock.Value.ToString() : "-")</td>
+                        <td>
+                            @if (product.Status == "Düşük Stok")
+                            {
+                                <span class="badge bg-warning">@product.Status</span>
+                            }
+                            else if (product.Status == "Stok Yok")
+                            {
+                                <span class="badge bg-danger">@product.Status</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-success">@product.Status</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (!products.Any())
+    {
+        <div class="alert alert-info text-center">
+            <i class="fas fa-info-circle"></i> Kayıt bulunamadı
+        </div>
+    }
+}
+
+@code {
+    private List<StockReportDto> products = new();
+    private StockSummaryDto summary = new();
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        loading = true;
+        StateHasChanged(); // Yükleniyor mesajını göster
+
+        try
+        {
+            // Tek method çağrısı ile hem rapor hem özet al
+            var result = await StockService.GetStockReportWithSummaryAsync();
+            products = result.Products;
+            summary = result.Summary;
+        }
+        catch (Exception ex)
+        {
+            // Hata yönetimi - gerçek uygulamada toast message gösterebilirsiniz
+            Console.WriteLine($"Hata: {ex.Message}");
+        }
+        finally
+        {
+            loading = false;
+            StateHasChanged();
+        }
+    }
+
+    // Sayfayı yenilemek için method
+    private async Task RefreshData()
+    {
+        await LoadData();
+    }
+}

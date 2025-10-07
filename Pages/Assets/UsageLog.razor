@@ -1,0 +1,88 @@
+@page "/assets/usagelog/{assetId:int}"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Services.Iservice
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext _context
+@inject NavigationManager Navigation
+@inject IUserContextService UserContext
+@inject IProcessService ProcessService
+@inject IAssetService AssetService
+
+<h3>Kullanım Kaydı</h3>
+
+@if (asset == null)
+{
+    <p><em>Yükleniyor...</em></p>
+}
+else
+{
+    <h5>@asset.Name</h5>
+
+    <EditForm Model="logModel" OnValidSubmit="SaveLog">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="row mb-3">
+            <div class="col">
+                <label>Kilometre</label>
+                <InputNumber class="form-control" TValue="int?" @bind-Value="logModel.Km" />
+            </div>
+            <div class="col">
+                <label>Saat</label>
+                <InputNumber class="form-control" TValue="int?" @bind-Value="logModel.HourMeter" />
+            </div>
+            <div class="col">
+                <label>Not</label>
+                <InputText class="form-control" @bind-Value="logModel.Notes" />
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Kaydet</button>
+    </EditForm>
+
+    <h5 class="mt-4">Geçmiş Kayıtlar</h5>
+    <table class="table table-bordered">
+        <thead>
+            <tr><th>Tarih</th><th>Km</th><th>Saat</th><th>Not</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var log in logs)
+            {
+                <tr>
+                    <td>@log.LogDate.ToShortDateString()</td>
+                    <td>@(log.Km ?? 0)</td>
+                    <td>@(log.HourMeter ?? 0)</td>
+                    <td>@log.Notes</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter] public int assetId { get; set; }
+    private Asset? asset;
+    private List<AssetUsageLog> logs = new();
+    private AssetUsageLog logModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        asset = await _context.Assets.FindAsync(assetId);
+        logs = await _context.AssetUsageLogs
+            .Where(l => l.AssetId == assetId)
+            .OrderByDescending(l => l.LogDate)
+            .ToListAsync();
+    }
+
+    private async Task SaveLog()
+    {
+        var userId = await UserContext.GetCurrentUserIdAsync();
+        if (string.IsNullOrEmpty(userId))
+            throw new InvalidOperationException("Kullanıcı bulunamadı!");
+
+        await AssetService.LogUsageAsync(assetId, logModel.Km, logModel.HourMeter, userId, logModel.Notes);
+        Navigation.NavigateTo($"/assets/usagelog/{assetId}", true);
+    }
+}

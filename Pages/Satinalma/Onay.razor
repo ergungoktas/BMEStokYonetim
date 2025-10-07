@@ -1,0 +1,195 @@
+﻿@page "/satinalma/onay"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Services.Iservice
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext _context
+@inject IUserContextService userContextService
+@inject IPurchaseService purchaseService
+
+<h3>Satınalma Onayları</h3>
+
+@if (isLoading)
+{
+    <p><em>Yükleniyor...</em></p>
+}
+else
+{
+    <ul class="nav nav-tabs">
+        <li class="nav-item">
+            <button class='nav-link @(activeTab == "unit" ? "active" : "")'
+                    @onclick='() => ChangeTab("unit")'>
+                Birim Onayı
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class='nav-link @(activeTab == "management" ? "active" : "")'
+                    @onclick='() => ChangeTab("management")'>
+                Yönetim Onayı
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content mt-3">
+        @if (activeTab == "unit")
+        {
+            <h5>Birim Onayı Bekleyen Satınalmalar</h5>
+            @RenderGrouped(unitPendingItems, ApproveByUnit, RejectItem)
+        }
+        else if (activeTab == "management")
+        {
+            <h5>Yönetim Onayı Bekleyen Satınalmalar</h5>
+            @RenderGrouped(managementPendingItems, ApproveByManagement, RejectItem)
+        }
+    </div>
+}
+
+@code {
+    private string activeTab = "unit";
+    private bool isLoading = true;
+    private string? currentUserId;
+    private List<PurchaseDetail> unitPendingItems = new();
+    private List<PurchaseDetail> managementPendingItems = new();
+    private HashSet<int> disabledItems = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUserId = await userContextService.GetCurrentUserIdAsync();
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+
+        unitPendingItems = await _context.PurchaseDetails
+            .Include(p => p.Product)
+            .Include(p => p.Purchase)
+            .Include(p => p.Supplier)
+            .Where(p => p.Status == TalepDurumu.PurchasePending && p.ApprovalStage == OnayAsamasi.None)
+            .OrderBy(p => p.PurchaseId)
+            .ToListAsync();
+
+        managementPendingItems = await _context.PurchaseDetails
+            .Include(p => p.Product)
+            .Include(p => p.Purchase)
+            .Include(p => p.Supplier)
+            .Where(p => p.Status == TalepDurumu.PurchasePending && p.ApprovalStage == OnayAsamasi.UnitApproved)
+            .OrderBy(p => p.PurchaseId)
+            .ToListAsync();
+
+        isLoading = false;
+    }
+
+    private RenderFragment RenderGrouped(List<PurchaseDetail> list, Func<PurchaseDetail, Task> approveFunc, Func<PurchaseDetail, Task> rejectFunc) => @<div>
+@if (!list.Any())
+    {
+    <p class="text-muted">Bekleyen satınalma bulunmuyor.</p>
+    }
+    else
+    {
+@foreach (var group in list.GroupBy(x => x.PurchaseId))
+    {
+    var purchase = group.First().Purchase!;
+    var totalPurchase = group.Sum(i => i.Quantity * i.UnitPrice);
+    var currency = group.First().Currency;
+
+    <div class="card mb-3 shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div>
+                <strong>Satınalma No:</strong> @purchase.PurchaseNumber
+                &nbsp;|&nbsp;
+                <strong>Toplam:</strong> @totalPurchase.ToString("N2") @currency
+            </div>
+            <div>
+                <button class="btn btn-success btn-sm me-2" @onclick="() => ApproveAll(group, approveFunc)">Hepsini Onayla</button>
+                <button class="btn btn-danger btn-sm" @onclick="() => RejectAll(group, rejectFunc)">Hepsini Reddet</button>
+            </div>
+        </div>
+
+        <table class="table table-sm table-striped mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Ürün</th>
+                    <th>Satıcı</th>
+                    <th class="text-end">Miktar</th>
+                    <th class="text-end">Birim Fiyat</th>
+                    <th class="text-end">Toplam</th>
+                    <th>İşlem</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in group)
+                                {
+                                bool disabled = disabledItems.Contains(item.Id);
+                    var lineTotal = item.Quantity * item.UnitPrice;
+                    <tr>
+                        <td>@item.Product?.Name</td>
+                        <td>@item.Supplier?.CompanyName</td>
+                        <td class="text-end">@item.Quantity</td>
+                        <td class="text-end">@item.UnitPrice.ToString("N2")</td>
+                        <td class="text-end">@lineTotal.ToString("N2") @item.Currency</td>
+                        <td>
+                            <button class="btn btn-success btn-sm me-1" disabled="@disabled" @onclick="() => approveFunc(item)">
+                                @(disabled ? "Onaylandı" : "Onayla")
+                            </button>
+                            <button class="btn btn-danger btn-sm" disabled="@disabled" @onclick="() => rejectFunc(item)">
+                                Reddet
+                            </button>
+                        </td>
+                    </tr>
+                }
+
+                <tr class="table-light fw-semibold">
+                    <td colspan="4" class="text-end">Genel Toplam:</td>
+                    <td class="text-end text-primary">
+                        @group.Sum(i => i.Quantity * i.UnitPrice).ToString("N2") @group.First().Currency
+                    </td>
+                    <td></td>
+                </tr>
+            </tbody>
+        </table>
+
+    </div>
+    }
+    }
+</div>;
+
+    private async Task ApproveAll(IEnumerable<PurchaseDetail> group, Func<PurchaseDetail, Task> approveFunc)
+{
+    foreach (var item in group)
+        await approveFunc(item);
+}
+
+private async Task RejectAll(IEnumerable<PurchaseDetail> group, Func<PurchaseDetail, Task> rejectFunc)
+{
+    foreach (var item in group)
+        await rejectFunc(item);
+}
+
+private async Task ApproveByUnit(PurchaseDetail item)
+{
+    if (currentUserId == null) return;
+    disabledItems.Add(item.Id);
+    await purchaseService.ApproveByUnitAsync(item.Id, currentUserId);
+    await LoadData();
+}
+
+private async Task ApproveByManagement(PurchaseDetail item)
+{
+    if (currentUserId == null) return;
+    disabledItems.Add(item.Id);
+    await purchaseService.ApproveByManagementAsync(item.Id, currentUserId);
+    await LoadData();
+}
+
+private async Task RejectItem(PurchaseDetail item)
+{
+    if (currentUserId == null) return;
+    disabledItems.Add(item.Id);
+    await purchaseService.RejectAsync(item.Id, currentUserId);
+    await LoadData();
+}
+
+private void ChangeTab(string tab) => activeTab = tab;
+}

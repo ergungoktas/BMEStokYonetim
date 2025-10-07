@@ -1,0 +1,53 @@
+﻿@page "/tanimlar/lokasyon"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext _context
+
+<h3>Lokasyonlar</h3>
+
+<EditForm Model="model" OnValidSubmit="Save">
+    <DataAnnotationsValidator /><ValidationSummary />
+    <div class="row mb-2">
+        <div class="col"><InputText class="form-control" placeholder="Adı" @bind-Value="model.Name" /></div>
+        <div class="col"><InputText class="form-control" placeholder="Açıklama" @bind-Value="model.Description" /></div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-primary">@((model.Id==0)?"Ekle":"Güncelle")</button>
+            @if(model.Id!=0){<button type="button" class="btn btn-secondary" @onclick="Cancel">İptal</button>}
+        </div>
+    </div>
+</EditForm>
+
+<hr />
+<button class="btn btn-info mb-2" @onclick="LoadList">Listeyi Göster/Gizle</button>
+
+@if(showList){
+    <table class="table table-striped">
+        <thead><tr><th>Ad</th><th>Açıklama</th><th>İşlemler</th></tr></thead>
+        <tbody>
+        @foreach(var item in list){
+            <tr>
+                <td>@item.Name</td>
+                <td>@item.Description</td>
+                <td>
+                    <button class="btn btn-sm btn-warning" @onclick="()=>Edit(item)">Düzenle</button>
+                    <button class="btn btn-sm btn-danger" @onclick="()=>Delete(item.Id)">Sil</button>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    private Location model=new();
+    private List<Location> list=new();
+    private bool showList;
+
+    private async Task LoadList(){ if(!showList) list=await _context.Locations.ToListAsync(); showList=!showList; }
+    private async Task Save(){ if(model.Id==0) _context.Locations.Add(model); else _context.Locations.Update(model); await _context.SaveChangesAsync(); model=new(); await LoadList(); }
+    private void Edit(Location item)=>model=new(){Id=item.Id,Name=item.Name,Description=item.Description};
+    private async Task Delete(int id){ var e=await _context.Locations.FindAsync(id); if(e!=null){ _context.Locations.Remove(e); await _context.SaveChangesAsync(); await LoadList(); } }
+    private void Cancel()=>model=new();
+}

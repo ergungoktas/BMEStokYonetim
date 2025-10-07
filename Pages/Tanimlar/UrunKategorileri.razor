@@ -1,0 +1,192 @@
+﻿@page "/tanimlar/urunkategorileri"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext _context
+
+<PageTitle>Ürün Kategorileri</PageTitle>
+
+<h3>Ürün Kategorileri</h3>
+
+<!-- ANA KATEGORİ FORMU -->
+<h5>Ana Kategori</h5>
+<EditForm Model="mainModel" OnValidSubmit="SaveMainCategory">
+    <DataAnnotationsValidator /><ValidationSummary />
+    <div class="row mb-2">
+        <div class="col">
+            <InputText class="form-control" placeholder="Ana Kategori Adı" @bind-Value="mainModel.Name" />
+        </div>
+        <div class="col">
+            <InputText class="form-control" placeholder="Açıklama" @bind-Value="mainModel.Description" />
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-primary">@((mainModel.Id == 0) ? "Ekle" : "Güncelle")</button>
+            @if (mainModel.Id != 0)
+            {
+                <button type="button" class="btn btn-secondary" @onclick="CancelMainEdit">İptal</button>
+            }
+        </div>
+    </div>
+</EditForm>
+
+<!-- ALT KATEGORİ FORMU -->
+<h5>Alt Kategori</h5>
+<EditForm Model="subModel" OnValidSubmit="SaveSubCategory">
+    <DataAnnotationsValidator /><ValidationSummary />
+    <div class="row mb-2">
+        <div class="col">
+            <InputSelect class="form-select" @bind-Value="subModel.ProductMainCategoryId">
+                <option value="">Ana kategori seçiniz</option>
+                @foreach (var m in mainCategories)
+                {
+                    <option value="@m.Id">@m.Name</option>
+                }
+            </InputSelect>
+        </div>
+        <div class="col">
+            <InputText class="form-control" placeholder="Alt Kategori Adı" @bind-Value="subModel.Name" />
+        </div>
+        <div class="col">
+            <InputText class="form-control" placeholder="Açıklama" @bind-Value="subModel.Description" />
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-success">@((subModel.Id == 0) ? "Ekle" : "Güncelle")</button>
+            @if (subModel.Id != 0)
+            {
+                <button type="button" class="btn btn-secondary" @onclick="CancelSubEdit">İptal</button>
+            }
+        </div>
+    </div>
+</EditForm>
+
+<hr />
+
+<!-- ANA KATEGORİ LİSTESİ -->
+<h5>Ana Kategoriler</h5>
+<table class="table table-striped">
+    <thead>
+        <tr><th>Ad</th><th>Açıklama</th><th>İşlemler</th></tr>
+    </thead>
+    <tbody>
+        @foreach (var item in mainCategories)
+        {
+            <tr>
+                <td>@item.Name</td>
+                <td>@item.Description</td>
+                <td>
+                    <button class="btn btn-sm btn-warning" @onclick="() => EditMain(item)">Düzenle</button>
+                    <button class="btn btn-sm btn-danger" @onclick="() => DeleteMain(item.Id)">Sil</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<!-- ALT KATEGORİ LİSTESİ -->
+<h5>Alt Kategoriler</h5>
+<table class="table table-striped">
+    <thead>
+        <tr><th>Ana Kategori</th><th>Ad</th><th>Açıklama</th><th>İşlemler</th></tr>
+    </thead>
+    <tbody>
+        @foreach (var item in subCategories)
+        {
+            <tr>
+                <td>@item.ProductMainCategory?.Name</td>
+                <td>@item.Name</td>
+                <td>@item.Description</td>
+                <td>
+                    <button class="btn btn-sm btn-warning" @onclick="() => EditSub(item)">Düzenle</button>
+                    <button class="btn btn-sm btn-danger" @onclick="() => DeleteSub(item.Id)">Sil</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private ProductMainCategory mainModel = new();
+    private ProductSubCategory subModel = new();
+
+    private List<ProductMainCategory> mainCategories = new();
+    private List<ProductSubCategory> subCategories = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLists();
+    }
+
+    private async Task LoadLists()
+    {
+        mainCategories = await _context.ProductMainCategories.AsNoTracking().ToListAsync();
+        subCategories = await _context.ProductSubCategories
+            .Include(s => s.ProductMainCategory)
+            .AsNoTracking()
+            .ToListAsync();
+    }
+
+    // ==== Ana Kategori ====
+    private async Task SaveMainCategory()
+    {
+        if (mainModel.Id == 0)
+            _context.ProductMainCategories.Add(mainModel);
+        else
+            _context.ProductMainCategories.Update(mainModel);
+
+        await _context.SaveChangesAsync();
+        mainModel = new();
+        await LoadLists();
+    }
+
+    private void EditMain(ProductMainCategory item) =>
+        mainModel = new() { Id = item.Id, Name = item.Name, Description = item.Description };
+
+    private async Task DeleteMain(int id)
+    {
+        var e = await _context.ProductMainCategories.FindAsync(id);
+        if (e != null)
+        {
+            _context.ProductMainCategories.Remove(e);
+            await _context.SaveChangesAsync();
+            await LoadLists();
+        }
+    }
+
+    private void CancelMainEdit() => mainModel = new();
+
+    // ==== Alt Kategori ====
+    private async Task SaveSubCategory()
+    {
+        if (subModel.Id == 0)
+            _context.ProductSubCategories.Add(subModel);
+        else
+            _context.ProductSubCategories.Update(subModel);
+
+        await _context.SaveChangesAsync();
+        subModel = new();
+        await LoadLists();
+    }
+
+    private void EditSub(ProductSubCategory item) =>
+        subModel = new()
+        {
+            Id = item.Id,
+            Name = item.Name,
+            Description = item.Description,
+            ProductMainCategoryId = item.ProductMainCategoryId
+        };
+
+    private async Task DeleteSub(int id)
+    {
+        var e = await _context.ProductSubCategories.FindAsync(id);
+        if (e != null)
+        {
+            _context.ProductSubCategories.Remove(e);
+            await _context.SaveChangesAsync();
+            await LoadLists();
+        }
+    }
+
+    private void CancelSubEdit() => subModel = new();
+}

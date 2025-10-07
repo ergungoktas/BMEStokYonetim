@@ -1,0 +1,210 @@
+﻿@page "/talep/onay"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Services.Iservice
+@using Microsoft.EntityFrameworkCore
+@using System.ComponentModel
+@inject ApplicationDbContext _context
+@inject IProcessService processService
+@inject IUserContextService userContextService
+
+<h3>Talep Onayları</h3>
+
+@if (isLoading)
+{
+    <p><em>Yükleniyor...</em></p>
+}
+else
+{
+    <ul class="nav nav-tabs" id="approvalTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(activeTab == "unit" ? "active" : "")"
+                    @onclick='() => ChangeTab("unit")'>
+                Birim Onayı
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(activeTab == "management" ? "active" : "")"
+                    @onclick='() => ChangeTab("management")'>
+                Yönetim Onayı
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content mt-3">
+        @if (activeTab == "unit")
+        {
+            <h5>Birim Onayı Bekleyen Talepler</h5>
+            @RenderRequestItems(unitPendingItems, "unit")
+        }
+        else if (activeTab == "management")
+        {
+            <h5>Yönetim Onayı Bekleyen Talepler</h5>
+            @RenderRequestItems(managementPendingItems, "management")
+        }
+    </div>
+}
+
+@code {
+    private string activeTab = "unit";
+    private List<RequestItem> unitPendingItems = new();
+    private List<RequestItem> managementPendingItems = new();
+    private bool isLoading = true;
+    private string? currentUserId;
+    private HashSet<int> disabledItems = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUserId = await userContextService.GetCurrentUserIdAsync();
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+
+        // 🔹 Birim onayı bekleyenler
+        unitPendingItems = await _context.RequestItems
+            .Include(i => i.Product)
+            .Include(i => i.Request)
+                .ThenInclude(r => r.RequestedByUser)
+            .Where(i => i.Status == TalepDurumu.Open && i.ApprovalStage == OnayAsamasi.None)
+            .OrderBy(i => i.RequestId)
+            .ToListAsync();
+
+        // 🔹 Yönetim onayı bekleyenler
+        managementPendingItems = await _context.RequestItems
+            .Include(i => i.Product)
+            .Include(i => i.Request)
+                .ThenInclude(r => r.RequestedByUser)
+            .Where(i => i.Status == TalepDurumu.Open && i.ApprovalStage == OnayAsamasi.UnitApproved)
+            .OrderBy(i => i.RequestId)
+            .ToListAsync();
+
+        disabledItems.Clear();
+        isLoading = false;
+    }
+
+    private RenderFragment RenderRequestItems(List<RequestItem> items, string mode) => builder =>
+    {
+        if (!items.Any())
+        {
+            builder.AddMarkupContent(0, "<p class='text-muted'>Bekleyen talep bulunmuyor.</p>");
+            return;
+        }
+
+        int seq = 1;
+        builder.OpenElement(seq++, "table");
+        builder.AddAttribute(seq++, "class", "table table-striped align-middle");
+
+        // thead
+        builder.OpenElement(seq++, "thead");
+        builder.AddAttribute(seq++, "class", "table-light");
+        builder.OpenElement(seq++, "tr");
+        foreach (var head in new[] { "Talep No", "Ürün", "Miktar", "Durum", "Talep Eden", "İşlem" })
+        {
+            builder.OpenElement(seq++, "th");
+            builder.AddContent(seq++, head);
+            builder.CloseElement();
+        }
+        builder.CloseElement(); // tr
+        builder.CloseElement(); // thead
+
+        // tbody
+        builder.OpenElement(seq++, "tbody");
+        foreach (var item in items)
+        {
+            bool disabled = disabledItems.Contains(item.Id);
+
+            builder.OpenElement(seq++, "tr");
+            builder.OpenElement(seq++, "td"); builder.AddContent(seq++, item.Request?.RequestNumber); builder.CloseElement();
+            builder.OpenElement(seq++, "td"); builder.AddContent(seq++, item.Product?.Name); builder.CloseElement();
+            builder.OpenElement(seq++, "td"); builder.AddContent(seq++, item.RequestedQuantity); builder.CloseElement();
+            builder.OpenElement(seq++, "td"); builder.AddContent(seq++, GetEnumDescription(item.Status)); builder.CloseElement();
+            builder.OpenElement(seq++, "td"); builder.AddContent(seq++, item.Request?.RequestedByUser?.FullName); builder.CloseElement();
+
+            // İşlem hücresi
+            builder.OpenElement(seq++, "td");
+            if (mode == "unit")
+            {
+                // ✅ Onayla
+                builder.OpenElement(seq++, "button");
+                builder.AddAttribute(seq++, "class", "btn btn-success btn-sm me-1");
+                builder.AddAttribute(seq++, "disabled", disabled);
+                if (!disabled)
+                    builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create(this, () => ApproveByUnit(item)));
+                builder.AddContent(seq++, disabled ? "Onaylandı" : "Onayla");
+                builder.CloseElement();
+
+                // ❌ Reddet
+                builder.OpenElement(seq++, "button");
+                builder.AddAttribute(seq++, "class", "btn btn-danger btn-sm");
+                builder.AddAttribute(seq++, "disabled", disabled);
+                if (!disabled)
+                    builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create(this, () => RejectItem(item)));
+                builder.AddContent(seq++, "Reddet");
+                builder.CloseElement();
+            }
+            else if (mode == "management")
+            {
+                // ✅ Yönetim Onayla
+                builder.OpenElement(seq++, "button");
+                builder.AddAttribute(seq++, "class", "btn btn-primary btn-sm me-1");
+                builder.AddAttribute(seq++, "disabled", disabled);
+                if (!disabled)
+                    builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create(this, () => ApproveByManagement(item)));
+                builder.AddContent(seq++, disabled ? "Onaylandı" : "Yönetim Onayla");
+                builder.CloseElement();
+
+                // ❌ Reddet
+                builder.OpenElement(seq++, "button");
+                builder.AddAttribute(seq++, "class", "btn btn-danger btn-sm");
+                builder.AddAttribute(seq++, "disabled", disabled);
+                if (!disabled)
+                    builder.AddAttribute(seq++, "onclick", EventCallback.Factory.Create(this, () => RejectItem(item)));
+                builder.AddContent(seq++, "Reddet");
+                builder.CloseElement();
+            }
+            builder.CloseElement(); // td
+            builder.CloseElement(); // tr
+        }
+        builder.CloseElement(); // tbody
+        builder.CloseElement(); // table
+    };
+
+    private async Task ApproveByUnit(RequestItem item)
+    {
+        if (currentUserId == null) return;
+        disabledItems.Add(item.Id);
+        await InvokeAsync(StateHasChanged);
+        await processService.ApproveByUnitAsync(item.Id, currentUserId);
+        await LoadData();
+    }
+
+    private async Task ApproveByManagement(RequestItem item)
+    {
+        if (currentUserId == null) return;
+        disabledItems.Add(item.Id);
+        await InvokeAsync(StateHasChanged);
+        await processService.ApproveByManagementAsync(item.Id, currentUserId);
+        await LoadData();
+    }
+
+    private async Task RejectItem(RequestItem item)
+    {
+        if (currentUserId == null) return;
+        disabledItems.Add(item.Id);
+        await InvokeAsync(StateHasChanged);
+        await processService.RejectAsync(item.Id, currentUserId);
+        await LoadData();
+    }
+
+    private void ChangeTab(string tab) => activeTab = tab;
+
+    private static string GetEnumDescription(Enum value)
+    {
+        var field = value.GetType().GetField(value.ToString());
+        var attr = (DescriptionAttribute?)Attribute.GetCustomAttribute(field!, typeof(DescriptionAttribute));
+        return attr?.Description ?? value.ToString();
+    }
+}

@@ -1,0 +1,94 @@
+﻿@page "/stok/transfer"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Services.Iservice
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext _context
+@inject IUserContextService UserContext
+@inject IStockService StockService
+
+<h3>Stok Transfer</h3>
+
+<div class="row g-2">
+    <div class="col-3">
+        <label>Ürün</label>
+        <InputSelect class="form-control" @bind-Value="productId">
+            <option value="">Seçiniz</option>
+            @foreach (var p in products)
+            {
+                <option value="@p.Id">@p.Name (@p.Unit)</option>
+            }
+        </InputSelect>
+    </div>
+    <div class="col-3">
+        <label>Kaynak Lokasyon</label>
+        <InputSelect class="form-control" @bind-Value="fromLocId">
+            <option value="">Seçiniz</option>
+            @foreach (var l in locations)
+            {
+                <option value="@l.Id">@l.Name</option>
+            }
+        </InputSelect>
+    </div>
+    <div class="col-3">
+        <label>Hedef Lokasyon</label>
+        <InputSelect class="form-control" @bind-Value="toLocId">
+            <option value="">Seçiniz</option>
+            @foreach (var l in locations)
+            {
+                <option value="@l.Id">@l.Name</option>
+            }
+        </InputSelect>
+    </div>
+    <div class="col-3">
+        <label>Miktar</label>
+        <InputNumber class="form-control" TValue="int" @bind-Value="qty" />
+    </div>
+</div>
+
+<div class="row g-2 mt-2">
+    <div class="col-3">
+        <label>Evrak No</label>
+        <InputText class="form-control" @bind-Value="docNo" />
+    </div>
+    <div class="col-7">
+        <label>Açıklama</label>
+        <InputText class="form-control" @bind-Value="desc" />
+    </div>
+    <div class="col-2">
+        <label>&nbsp;</label>
+        <button class="btn btn-primary w-100" @onclick="DoTransfer" disabled="@(!CanTransfer)">Transfer Et</button>
+    </div>
+</div>
+
+@code {
+    private List<Product> products = new();
+    private List<Location> locations = new();
+
+    private int productId;
+    private int? fromLocId;
+    private int? toLocId;
+    private int qty;
+    private string? docNo;
+    private string? desc;
+
+    protected override async Task OnInitializedAsync()
+    {
+        products = await _context.Products.ToListAsync();
+        locations = await _context.Locations.ToListAsync();
+    }
+
+    private bool CanTransfer =>
+        productId > 0 && fromLocId.HasValue && toLocId.HasValue && fromLocId.Value > 0 &&
+        toLocId.Value > 0 && fromLocId.Value != toLocId.Value && qty > 0;
+
+    private async Task DoTransfer()
+    {
+        var userId = await UserContext.GetCurrentUserIdAsync();
+        if (string.IsNullOrEmpty(userId)) throw new InvalidOperationException("Kullanıcı bulunamadı!");
+
+        await StockService.TransferAsync(productId, qty, fromLocId!.Value, toLocId!.Value, userId, docNo, desc);
+        qty = 0; docNo = desc = null; fromLocId = toLocId = null; productId = 0;
+    }
+}

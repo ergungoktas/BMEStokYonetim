@@ -1,0 +1,363 @@
+@page "/talep/yeni"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Helpers
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Services.Iservice
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@using System.ComponentModel
+@inject ApplicationDbContext _context
+@inject IRequestService requestService
+@inject IUserContextService userContextService
+@inject NavigationManager Navigation
+
+<h3>Yeni Talep Oluştur</h3>
+
+@if (!string.IsNullOrWhiteSpace(successMessage))
+{
+    <div class="alert alert-success">@successMessage</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(formError))
+{
+    <div class="alert alert-danger">@formError</div>
+}
+
+<EditForm Model="@request" OnValidSubmit="HandleValidSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="row g-3">
+        <div class="col-md-4">
+            <label class="form-label">Lokasyon</label>
+            <select class="form-select" @onchange="OnLocationChanged">
+                <option value="">Lokasyon Seçiniz</option>
+                @foreach (var loc in locations)
+                {
+                    <option value="@loc.Id">@loc.Name</option>
+                }
+            </select>
+        </div>
+
+        <div class="col-md-4">
+            <label class="form-label">Depo</label>
+            <select class="form-select" @bind="request.WarehouseId" disabled="@isWarehouseDisabled">
+                <option value="0">Depo Seçiniz</option>
+                @foreach (var w in warehouses)
+                {
+                    <option value="@w.Id">@w.Name</option>
+                }
+            </select>
+        </div>
+
+        <div class="col-md-4">
+            <label class="form-label">Talep Numarası</label>
+            <InputText class="form-control" @bind-Value="request.RequestNumber" disabled />
+        </div>
+    </div>
+
+    <div class="mt-3">
+        <label class="form-label">Açıklama</label>
+        <InputTextArea class="form-control" @bind-Value="request.Description" />
+    </div>
+
+    <hr />
+
+    <h5>Talep Kalemleri</h5>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Ürün</th>
+                <th>Birim</th>
+                <th>Miktar</th>
+                <th>Açıklama</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (request.Items.Any())
+            {
+                @foreach (var item in request.Items)
+                {
+                    <tr>
+                        <td>@item.Product?.Name</td>
+                        <td>@item.Product?.Unit.GetDescription()</td>
+                        <td>@item.RequestedQuantity</td>
+                        <td>@item.Description</td>
+                        <td>
+                            <button type="button" class="btn btn-danger btn-sm" @onclick="() => RemoveItem(item)">Sil</button>
+                        </td>
+                    </tr>
+                }
+            }
+            else
+            {
+                <tr>
+                    <td colspan="5" class="text-center text-muted">Henüz kalem eklenmedi</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <div class="card p-3 mt-3 shadow-sm">
+        <h6>Yeni Kalem Ekle</h6>
+
+        <div class="row g-2 align-items-end">
+            <!-- Ürün -->
+            <div class="col-md-4">
+                <label class="form-label">Ürün</label>
+                <select class="form-select"
+                        @bind="newItemProductId"
+                        @bind:after="OnProductChanged">
+                    <option value="">Ürün Seç</option>
+                    @foreach (var p in products)
+                    {
+                        <option value="@p.Id">@p.Name</option>
+                    }
+                </select>
+            </div>
+
+            <!-- Miktar -->
+            <div class="col-md-3">
+                <label class="form-label">Miktar</label>
+                <InputNumber class="form-control"
+                             @bind-Value="newItemQuantity"
+                             placeholder="@GetQuantityPlaceholder()" />
+            </div>
+
+            <!-- Birim -->
+            @if (!string.IsNullOrWhiteSpace(selectedUnit))
+            {
+                <div class="col-md-2">
+                    <label class="form-label">Birim</label>
+                    <input class="form-control text-center bg-light fw-semibold"
+                           value="@selectedUnit"
+                           disabled />
+                </div>
+            }
+
+            <!-- Açıklama -->
+            <div class="col-md-2">
+                <label class="form-label">Açıklama</label>
+                <InputText class="form-control" @bind-Value="newItemDescription" />
+            </div>
+
+            <!-- Ekle -->
+            <div class="col-md-1 d-grid">
+                <button type="button" class="btn btn-primary"
+                        @onclick="AddItem"
+                        disabled="@(request.WarehouseId <= 0)">
+                    Ekle
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-3 d-flex gap-2">
+        <button type="submit" class="btn btn-success" disabled="@(!CanSubmit)">Kaydet</button>
+        <button type="button" class="btn btn-secondary" @onclick="Cancel">İptal</button>
+    </div>
+</EditForm>
+
+@code {
+    private Request request = new();
+    private List<Product> products = new();
+    private List<Location> locations = new();
+    private List<Warehouse> warehouses = new();
+    private bool isWarehouseDisabled = true;
+
+    private int? newItemProductId;
+    private int newItemQuantity;
+    private string? newItemDescription;
+    private string? selectedUnit;
+    private string? formError;
+    private string? successMessage;
+    private int? selectedLocationId;
+
+    private bool CanSubmit =>
+        selectedLocationId.HasValue &&
+        request.WarehouseId > 0 &&
+        !string.IsNullOrWhiteSpace(request.RequestNumber) &&
+        request.Items.Any();
+
+    protected override async Task OnInitializedAsync()
+    {
+        products = await _context.Products
+            .Where(p => p.IsActive)
+            .OrderBy(p => p.Name)
+            .ToListAsync();
+
+        locations = await _context.Locations
+            .OrderBy(l => l.Name)
+            .ToListAsync();
+
+        request.RequestDate = DateTime.Now;
+        request.RequestedByUserId = await userContextService.GetCurrentUserIdAsync();
+    }
+
+    private async Task OnLocationChanged(ChangeEventArgs e)
+    {
+        formError = null;
+        successMessage = null;
+        request.RequestNumber = string.Empty;
+        request.WarehouseId = 0;
+        warehouses.Clear();
+        isWarehouseDisabled = true;
+
+        if (int.TryParse(e.Value?.ToString(), out int locId))
+        {
+            selectedLocationId = locId;
+            warehouses = await _context.Warehouses
+                .Where(w => w.LocationId == locId)
+                .OrderBy(w => w.Name)
+                .ToListAsync();
+
+            isWarehouseDisabled = warehouses.Count == 0;
+
+            request.RequestNumber = await requestService.GenerateRequestNumberAsync(locId);
+            request.LocationId = locId;
+        }
+        else
+        {
+            selectedLocationId = null;
+        }
+    }
+
+    private void OnProductChanged()
+    {
+        if (newItemProductId is > 0)
+        {
+            var selectedProduct = products.FirstOrDefault(p => p.Id == newItemProductId.Value);
+            selectedUnit = selectedProduct?.Unit.GetDescription();
+        }
+        else
+        {
+            selectedUnit = null;
+        }
+    }
+
+    private string GetQuantityPlaceholder()
+    {
+        return string.IsNullOrWhiteSpace(selectedUnit)
+            ? "Miktar"
+            : $"Miktar ({selectedUnit})";
+    }
+
+    private void AddItem()
+    {
+        formError = null;
+        successMessage = null;
+
+        if (request.WarehouseId <= 0)
+        {
+            formError = "Lütfen önce depo seçiniz.";
+            return;
+        }
+
+        if (newItemProductId == null || newItemProductId <= 0)
+        {
+            formError = "Lütfen ürün seçiniz.";
+            return;
+        }
+
+        if (newItemQuantity <= 0)
+        {
+            formError = "Miktar 0'dan büyük olmalıdır.";
+            return;
+        }
+
+        var product = products.FirstOrDefault(p => p.Id == newItemProductId);
+        if (product == null)
+        {
+            formError = "Seçilen ürün bulunamadı.";
+            return;
+        }
+
+        request.Items.Add(new RequestItem
+        {
+            ProductId = product.Id,
+            Product = product,
+            RequestedQuantity = newItemQuantity,
+            Description = newItemDescription,
+            TargetWarehouseId = request.WarehouseId
+        });
+
+        newItemProductId = null;
+        newItemQuantity = 0;
+        newItemDescription = string.Empty;
+        selectedUnit = null;
+    }
+
+    private void RemoveItem(RequestItem item)
+    {
+        request.Items.Remove(item);
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        formError = null;
+        successMessage = null;
+
+        if (!selectedLocationId.HasValue)
+        {
+            formError = "Lütfen lokasyon seçiniz.";
+            return;
+        }
+
+        if (request.WarehouseId <= 0)
+        {
+            formError = "Lütfen depo seçiniz.";
+            return;
+        }
+
+        if (!request.Items.Any())
+        {
+            formError = "En az bir talep kalemi eklemelisiniz.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(request.RequestNumber))
+        {
+            request.RequestNumber = await requestService.GenerateRequestNumberAsync(selectedLocationId.Value);
+        }
+
+        foreach (var item in request.Items)
+        {
+            if (!item.TargetWarehouseId.HasValue)
+                item.TargetWarehouseId = request.WarehouseId;
+        }
+
+        try
+        {
+            await requestService.AssignRequestItemNumbers(request);
+            _context.Requests.Add(request);
+            await _context.SaveChangesAsync();
+
+            successMessage = "Talep başarıyla kaydedildi!";
+        }
+        catch (Exception ex)
+        {
+            formError = "Talep kaydedilirken hata oluştu: " + ex.Message;
+            return;
+        }
+
+        // Formu temizle
+        request = new Request
+        {
+            RequestDate = DateTime.Now,
+            RequestedByUserId = await userContextService.GetCurrentUserIdAsync()
+        };
+        selectedLocationId = null;
+        warehouses.Clear();
+        isWarehouseDisabled = true;
+        newItemProductId = null;
+        newItemQuantity = 0;
+        newItemDescription = string.Empty;
+        selectedUnit = null;
+    }
+
+    private void Cancel()
+    {
+        Navigation.NavigateTo("/talep/liste");
+    }
+}

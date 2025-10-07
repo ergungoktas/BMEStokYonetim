@@ -1,0 +1,293 @@
+﻿@page "/tanimlar/urun"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Helpers
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop
+@inject ApplicationDbContext _context
+@inject ILogger<Urun> Logger
+@inject IJSRuntime JS
+
+<h3>Ürün Listesi</h3>
+
+@if (!string.IsNullOrEmpty(message))
+{
+    <div class="alert alert-success">@message</div>
+}
+
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Kodu</th>
+            <th>Adı</th>
+            <th>Marka</th>
+            <th>Birim</th>
+            <th>Kategori</th>
+            <th>İşlemler</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var product in products)
+        {
+            <tr>
+                <td>@product.Code</td>
+                <td>@product.Name</td>
+                <td>@product.Brand</td>
+                <td>@product.Unit.GetDescription()</td>
+                <td>@product.Category?.Name</td>
+                <td>
+                    <button class="btn btn-sm btn-warning" @onclick="() => Edit(product)">Düzenle</button>
+                    <button class="btn btn-sm btn-danger" @onclick="() => Delete(product)">Sil</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<hr />
+
+<h4>@(model.Id == 0 ? "Yeni Ürün" : "Ürün Düzenle")</h4>
+
+<EditForm Model="model" OnValidSubmit="Save">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="mb-3">
+        <label>Ürün Kodu</label>
+        <InputText class="form-control" @bind-Value="model.Code" readonly />
+    </div>
+
+    <div class="mb-3">
+        <label>Üst Kategori</label>
+        <InputSelect class="form-select" TValue="int?" @bind-Value="selectedMainCategoryId">
+            <option value="">Seçiniz</option>
+            @foreach (var main in mainCategories)
+            {
+                <option value="@main.Id">@main.Name</option>
+            }
+        </InputSelect>
+    </div>
+
+    <div class="mb-3">
+        <label>Alt Kategori</label>
+        <InputSelect class="form-select" TValue="int" @bind-Value="CategoryId">
+            <option value="">Seçiniz</option>
+            @foreach (var cat in filteredSubCategories)
+            {
+                <option value="@cat.Id">@cat.Name</option>
+            }
+        </InputSelect>
+    </div>
+
+    <div class="mb-3">
+        <label>Ad</label>
+        <InputText class="form-control" @bind-Value="model.Name" />
+    </div>
+
+    <div class="mb-3">
+        <label>Marka</label>
+        <InputText class="form-control" @bind-Value="model.Brand" />
+    </div>
+
+    <div class="mb-3">
+        <label>Birim</label>
+        <InputSelect class="form-select" @bind-Value="model.Unit">
+            @foreach (ProductUnit unit in Enum.GetValues(typeof(ProductUnit)))
+            {
+                <option value="@unit">@unit.GetDescription()</option>
+            }
+        </InputSelect>
+        <ValidationMessage For="@(() => model.Unit)" />
+    </div>
+
+    <div class="mb-3">
+        <label>Açıklama</label>
+        <InputText class="form-control" @bind-Value="model.Description" />
+    </div>
+
+    <div class="mb-3">
+        <label>Min. Stok</label>
+        <InputNumber class="form-control" @bind-Value="model.MinStock" />
+    </div>
+
+    <div class="form-check mb-3">
+        <InputCheckbox class="form-check-input" @bind-Value="model.IsActive" />
+        <label class="form-check-label">Aktif</label>
+    </div>
+
+    <button class="btn btn-primary" type="submit">Kaydet</button>
+    <button class="btn btn-secondary" type="button" @onclick="ResetForm">Temizle</button>
+</EditForm>
+
+@code {
+    private List<Product> products = new();
+    private List<ProductMainCategory> mainCategories = new();
+    private List<ProductSubCategory> allSubCategories = new();
+    private List<ProductSubCategory> filteredSubCategories = new();
+
+    private Product model = new();
+    private string? message;
+
+    private int? _selectedMainCategoryId;
+    private int? selectedMainCategoryId
+    {
+        get => _selectedMainCategoryId;
+        set
+        {
+            if (_selectedMainCategoryId != value)
+            {
+                _selectedMainCategoryId = value;
+                FilterSubCategories();
+            }
+        }
+    }
+
+    private int CategoryId
+    {
+        get => model.CategoryId;
+        set
+        {
+            if (model.CategoryId != value)
+            {
+                model.CategoryId = value;
+                _ = GenerateCode();
+            }
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProductsAsync();
+        mainCategories = await _context.ProductMainCategories.AsNoTracking().OrderBy(m => m.Name).ToListAsync();
+        allSubCategories = await _context.ProductSubCategories.AsNoTracking().ToListAsync();
+    }
+
+    private async Task LoadProductsAsync()
+    {
+        products = await _context.Products
+            .Include(p => p.Category)
+            .AsNoTracking()
+            .OrderBy(p => p.Name)
+            .ToListAsync();
+    }
+
+    private void FilterSubCategories()
+    {
+        if (selectedMainCategoryId.HasValue)
+        {
+            filteredSubCategories = allSubCategories
+                .Where(c => c.ProductMainCategoryId == selectedMainCategoryId.Value)
+                .OrderBy(c => c.Name)
+                .ToList();
+            model.CategoryId = 0;
+            model.Code = string.Empty;
+        }
+        else
+        {
+            filteredSubCategories.Clear();
+            model.CategoryId = 0;
+            model.Code = string.Empty;
+        }
+    }
+
+    private async Task GenerateCode()
+    {
+        if (model.CategoryId <= 0 || selectedMainCategoryId is null)
+            return;
+
+        string prefix = $"BME-Pr-{selectedMainCategoryId:D2}-{model.CategoryId:D2}";
+
+        var lastCode = await _context.Products
+            .Where(p => p.Code.StartsWith(prefix))
+            .OrderByDescending(p => p.Code)
+            .Select(p => p.Code)
+            .FirstOrDefaultAsync();
+
+        int next = 1;
+        if (!string.IsNullOrWhiteSpace(lastCode))
+        {
+            var parts = lastCode.Split('-');
+            if (parts.Length == 4 && int.TryParse(parts[3], out int parsed))
+                next = parsed + 1;
+        }
+
+        model.Code = $"{prefix}-{next:D5}";
+    }
+
+    private void Edit(Product product)
+    {
+        model = new Product
+        {
+            Id = product.Id,
+            Code = product.Code,
+            Name = product.Name,
+            Brand = product.Brand,
+            Unit = product.Unit,
+            CategoryId = product.CategoryId,
+            Description = product.Description,
+            IsActive = product.IsActive,
+            MinStock = product.MinStock
+        };
+
+        selectedMainCategoryId = allSubCategories
+            .FirstOrDefault(x => x.Id == model.CategoryId)?.ProductMainCategoryId;
+
+        FilterSubCategories();
+    }
+
+    private async Task Save()
+    {
+        try
+        {
+            if (model.Id == 0)
+            {
+                _context.Products.Add(model);
+                Logger.LogInformation("Yeni ürün eklendi: {Code}", model.Code);
+                message = "Ürün başarıyla eklendi.";
+            }
+            else
+            {
+                _context.Products.Update(model);
+                Logger.LogInformation("Ürün güncellendi: {Code}", model.Code);
+                message = "Ürün başarıyla güncellendi.";
+            }
+
+            await _context.SaveChangesAsync();
+            await LoadProductsAsync();
+            ResetForm();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Ürün kaydetme hatası");
+            message = "Hata oluştu.";
+        }
+    }
+
+    private async Task Delete(Product product)
+    {
+        var confirm = await JS.InvokeAsync<bool>("confirm", $"'{product.Name}' ürününü silmek istiyor musunuz?");
+        if (!confirm) return;
+
+        try
+        {
+            _context.Products.Remove(product);
+            await _context.SaveChangesAsync();
+            Logger.LogWarning("Ürün silindi: {Code}", product.Code);
+            message = "Ürün silindi.";
+            await LoadProductsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Silme sırasında hata");
+            message = "Silme başarısız.";
+        }
+    }
+
+    private void ResetForm()
+    {
+        model = new Product();
+        selectedMainCategoryId = null;
+        filteredSubCategories.Clear();
+    }
+}

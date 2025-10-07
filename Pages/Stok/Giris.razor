@@ -1,0 +1,121 @@
+@page "/stok/giris"
+@using Microsoft.EntityFrameworkCore
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Services.Iservice
+@inject ApplicationDbContext _context
+@inject IStockService StockService
+@inject IUserContextService UserContext
+
+<h3 class="mb-3">Satınalma Girişi (Teslimat Bekleyen Kalemler)</h3>
+
+@if (details == null)
+{
+    <p><em>Yükleniyor...</em></p>
+}
+else if (!details.Any())
+{
+    <div class="alert alert-info">Teslimat bekleyen satınalma kalemi bulunamadı.</div>
+}
+else
+{
+    <table class="table table-bordered align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>Satınalma No</th>
+                <th>Ürün</th>
+                <th>Tedarikçi</th>
+                <th>Miktar</th>
+                <th>Depo</th>
+                <th>Teslim Alınan</th>
+                <th>Açıklama</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var d in details)
+            {
+                <tr>
+                    <td>@d.Purchase.PurchaseNumber</td>
+                    <td>@d.Product?.Name</td>
+                    <td>@d.Supplier?.CompanyName</td>
+                    <td>@d.Quantity</td>
+                    <td>@d.RequestItem?.TargetWarehouse?.Name</td>
+                    <td>
+                        <input type="number" class="form-control" min="1"
+                               value="@(receivedQuantities[d.Id])"
+                               @oninput="(e) =>
+                               {
+                                   if (int.TryParse(e?.Value?.ToString(), out var val))
+                                       receivedQuantities[d.Id] = val;
+                               }" />
+                      </td>
+                      <td>
+                          <input type="text" class="form-control"
+                                 value="@(descriptions[d.Id])"
+                                 @oninput="(e) => descriptions[d.Id] = e.Value?.ToString()" />
+                      </td>
+                      <td>
+                          <button class="btn btn-success btn-sm"
+                                  @onclick="() => SaveEntryAsync(d.Id)">
+                              Kaydet
+                          </button>
+                      </td>
+                  </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<PurchaseDetail>? details;
+    private Dictionary<int, int> receivedQuantities = new();
+    private Dictionary<int, string?> descriptions = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        details = await _context.PurchaseDetails
+            .Include(d => d.Product)
+            .Include(d => d.Supplier)
+            .Include(d => d.Purchase)
+            .Include(d => d.RequestItem)
+                .ThenInclude(r => r.TargetWarehouse)
+            .Where(d => d.Status == TalepDurumu.PurchaseApproved)
+            .OrderByDescending(d => d.Purchase.PurchaseDate)
+            .ToListAsync();
+
+        foreach (var d in details)
+        {
+            receivedQuantities[d.Id] = d.Quantity;
+            descriptions[d.Id] = string.Empty;
+        }
+    }
+
+    private async Task SaveEntryAsync(int purchaseDetailId)
+    {
+        var userId = await UserContext.GetCurrentUserIdAsync();
+        if (string.IsNullOrEmpty(userId))
+            return;
+
+        if (!receivedQuantities.TryGetValue(purchaseDetailId, out int qty))
+            qty = 0;
+
+        string? desc = descriptions.ContainsKey(purchaseDetailId)
+            ? descriptions[purchaseDetailId]
+            : null;
+
+        var detail = details!.First(x => x.Id == purchaseDetailId);
+
+        await StockService.StockEntryAsync(
+            purchaseDetailId,
+            qty,
+            detail.RequestItem?.TargetWarehouseId ?? 1,
+            userId!,
+            $"GR-{DateTime.Now:yyyyMMddHHmm}",
+            desc
+        );
+
+        details!.Remove(detail);
+        StateHasChanged();
+    }
+}

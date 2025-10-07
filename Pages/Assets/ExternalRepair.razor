@@ -1,0 +1,94 @@
+@page "/assets/externalrepair/{assetId:int}"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Services.Iservice
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext _context
+@inject NavigationManager Navigation
+@inject IUserContextService UserContext
+@inject IAssetService AssetService
+
+<h3>Dışarı Gönderim / Geri Alma</h3>
+
+@if (asset == null)
+{
+    <p><em>Yükleniyor...</em></p>
+}
+else
+{
+    <h5>@asset.Name</h5>
+
+    <EditForm Model="repairModel" OnValidSubmit="SendRepair">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="mb-3">
+            <label>Firma Adı</label>
+            <InputText class="form-control" @bind-Value="repairModel.CompanyName" />
+        </div>
+        <div class="mb-3">
+            <label>Açıklama</label>
+            <InputTextArea class="form-control" @bind-Value="repairModel.Description" />
+        </div>
+
+        <button type="submit" class="btn btn-warning">Dışarı Gönder</button>
+    </EditForm>
+
+    <h5 class="mt-4">Mevcut Kayıtlar</h5>
+    <table class="table table-bordered">
+        <thead>
+            <tr><th>Tarih</th><th>Firma</th><th>Açıklama</th><th>Durum</th><th></th></tr>
+        </thead>
+        <tbody>
+            @foreach (var r in repairs)
+            {
+                <tr>
+                    <td>@r.SentDate?.ToShortDateString()</td>
+                    <td>@r.CompanyName</td>
+                    <td>@r.Description</td>
+                    <td>@(r.ReturnDate.HasValue ? "Döndü" : "Dışarıda")</td>
+                    <td>
+                        @if (!r.ReturnDate.HasValue)
+                        {
+                            <button class="btn btn-sm btn-success" @onclick="() => ReturnRepair(r.Id)">Geri Al</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter] public int assetId { get; set; }
+    private Asset? asset;
+    private List<AssetExternalRepair> repairs = new();
+    private AssetExternalRepair repairModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        asset = await _context.Assets.FindAsync(assetId);
+        repairs = await _context.AssetExternalRepairs
+            .Where(r => r.AssetId == assetId)
+            .OrderByDescending(r => r.SentDate)
+            .ToListAsync();
+    }
+
+    private async Task SendRepair()
+    {
+        var userId = await UserContext.GetCurrentUserIdAsync();
+        if (string.IsNullOrEmpty(userId))
+            throw new InvalidOperationException("Kullanıcı bulunamadı!");
+
+        await AssetService.SendToExternalRepairAsync(assetId, repairModel.CompanyName, repairModel.Description, userId);
+        Navigation.NavigateTo($"/assets/externalrepair/{assetId}", true);
+    }
+
+    private async Task ReturnRepair(int repairId)
+    {
+        var userId = await UserContext.GetCurrentUserIdAsync();
+        await AssetService.ReturnFromExternalRepairAsync(repairId, userId!);
+        Navigation.NavigateTo($"/assets/externalrepair/{assetId}", true);
+    }
+}

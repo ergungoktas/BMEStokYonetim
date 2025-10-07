@@ -1,0 +1,164 @@
+﻿@page "/"
+@using Microsoft.EntityFrameworkCore
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Helpers
+@inject ApplicationDbContext _context
+
+<h3 class="mb-4 fw-bold text-primary">
+    <i class="bi bi-speedometer2 me-2"></i> Sistem Durum Paneli
+</h3>
+
+@if (isLoading)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <div class="mt-2 text-muted">Veriler yükleniyor...</div>
+    </div>
+}
+else
+{
+    <div class="row g-4 mb-4">
+
+        @foreach (var card in SummaryCards)
+        {
+            <div class="col-12 col-sm-6 col-lg-3">
+                <div class="card shadow-sm border-0 dashboard-card h-100">
+                    <div class="card-body d-flex flex-column justify-content-between">
+                        <div>
+                            <div class="d-flex align-items-center mb-2">
+                                <div class="me-2 fs-4 text-@card.Color"><i class="@card.Icon"></i></div>
+                                <h6 class="text-muted fw-semibold mb-0">@card.Title</h6>
+                            </div>
+                            <h2 class="fw-bold mb-0">@card.Value</h2>
+                            <small class="text-secondary">@card.Subtext</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Rezervasyonlar -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+            <strong><i class="bi bi-clock-history me-2"></i> Bugün Süresi Dolacak Rezervasyonlar</strong>
+            <span class="badge bg-info">@expiringReservations.Count</span>
+        </div>
+        <div class="card-body p-0">
+            @if (!expiringReservations.Any())
+            {
+                <div class="p-3 text-muted text-center">Bugün süresi dolacak rezervasyon bulunamadı.</div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Ürün</th>
+                                <th>Depo</th>
+                                <th>Miktar</th>
+                                <th>Oluşturulma</th>
+                                <th>Geçerlilik Bitişi</th>
+                                <th>Durum</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var res in expiringReservations)
+                            {
+                                <tr>
+                                    <td>@res.Product?.Name</td>
+                                    <td>@res.Warehouse?.Name</td>
+                                    <td>@res.ReservedQuantity</td>
+                                    <td>@res.CreatedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                                    <td>@(res.ReleasedAt?.ToString("dd.MM.yyyy HH:mm") ?? "-")</td>
+                                    <td>
+                                        <span class="badge bg-@(GetBadgeColor(res.Status))">
+                                            @res.Status.GetDescription()
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+<style>
+    .dashboard-card {
+        transition: transform 0.15s ease, box-shadow 0.2s ease;
+        border-radius: 0.75rem;
+    }
+    .dashboard-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+</style>
+
+@code {
+    private bool isLoading = true;
+
+    private int pendingRequests;
+    private int approvedRequests;
+    private int activePurchases;
+    private int lowStockCount;
+    private int activeReservations;
+    private int expiredReservations;
+    private int cancelledReservations;
+    private List<StockReservation> expiringReservations = new();
+
+    private record DashboardCard(string Title, string Value, string Subtext, string Icon, string Color);
+    private List<DashboardCard> SummaryCards = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+
+        // Talep verileri
+        pendingRequests = await _context.RequestItems.CountAsync(r => r.Status == TalepDurumu.Open);
+        approvedRequests = await _context.RequestItems.CountAsync(r => r.Status == TalepDurumu.Approved);
+        activePurchases = await _context.PurchaseDetails.CountAsync(p => p.Status == TalepDurumu.PurchaseApproved);
+        lowStockCount = await _context.Products.CountAsync(p => p.MinStock.HasValue && p.CurrentStock <= p.MinStock.Value);
+
+        // Rezervasyonlar
+        activeReservations = await _context.StockReservations.CountAsync(r => r.Status == RezervasyonDurumu.ReservationActive);
+        expiredReservations = await _context.StockReservations.CountAsync(r => r.Status == RezervasyonDurumu.ReservationExpired);
+        cancelledReservations = await _context.StockReservations.CountAsync(r => r.Status == RezervasyonDurumu.ReservationCancelled);
+
+        var today = DateTime.Now.Date;
+        expiringReservations = await _context.StockReservations
+            .Include(r => r.Product)
+            .Include(r => r.Warehouse)
+            .Where(r => r.Status == RezervasyonDurumu.ReservationActive &&
+                        r.ReleasedAt.HasValue &&
+                        r.ReleasedAt.Value.Date == today)
+            .OrderBy(r => r.ReleasedAt)
+            .ToListAsync();
+
+        SummaryCards = new()
+        {
+            new("Onay Bekleyen Talepler", pendingRequests.ToString(), "Onay sürecinde bekleyen talepler", "bi bi-hourglass-split", "primary"),
+            new("Onaylanan Talepler", approvedRequests.ToString(), "Satınalma sürecine geçmiş talepler", "bi bi-check2-circle", "success"),
+            new("Teslimat Bekleyen Satınalmalar", activePurchases.ToString(), "Onaylı ama teslim edilmemiş kalemler", "bi bi-truck", "warning"),
+            new("Düşük Stok Ürünler", lowStockCount.ToString(), "Kritik stok seviyesindeki ürünler", "bi bi-exclamation-triangle", "danger"),
+            new("Aktif Rezervasyonlar", activeReservations.ToString(), "Kullanımda olan rezervasyonlar", "bi bi-calendar-check", "info"),
+            new("Süresi Dolmuş Rezervasyonlar", expiredReservations.ToString(), "Geçerliliği sona ermiş rezervasyonlar", "bi bi-calendar-x", "warning"),
+            new("İptal Edilen Rezervasyonlar", cancelledReservations.ToString(), "Depo yetkilisi tarafından iptal edilenler", "bi bi-x-circle", "secondary")
+        };
+
+        isLoading = false;
+    }
+
+    private string GetBadgeColor(RezervasyonDurumu status) => status switch
+    {
+        RezervasyonDurumu.ReservationActive => "info",
+        RezervasyonDurumu.ReservationCompleted => "success",
+        RezervasyonDurumu.ReservationExpired => "warning",
+        RezervasyonDurumu.ReservationCancelled => "danger",
+        _ => "secondary"
+    };
+}

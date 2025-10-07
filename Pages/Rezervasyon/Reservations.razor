@@ -1,0 +1,110 @@
+﻿@page "/rezervasyonlar"
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Services.Iservice
+@using BMEStokYonetim.Helpers
+@inject ApplicationDbContext _context
+@inject IStockService StockService
+@inject IUserContextService UserContext
+@inject IJSRuntime JS
+
+<h3 class="mb-3">📦 Aktif ve Geçmiş Rezervasyonlar</h3>
+
+@if (isLoading)
+{
+    <p><em>Yükleniyor...</em></p>
+}
+else if (!reservations.Any())
+{
+    <div class="alert alert-info">Hiç rezervasyon kaydı bulunamadı.</div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-bordered table-striped align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Ürün</th>
+                    <th>Depo</th>
+                    <th>Miktar</th>
+                    <th>Oluşturulma</th>
+                    <th>Geçerlilik Bitişi</th>
+                    <th>Tür</th>
+                    <th>Durum</th>
+                    <th>İşlem</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var res in reservations)
+                {
+                    var rowClass = res.Status switch
+                    {
+                        RezervasyonDurumu.ReservationActive => "table-info",
+                        RezervasyonDurumu.ReservationCompleted => "table-success",
+                        RezervasyonDurumu.ReservationExpired => "table-warning",
+                        RezervasyonDurumu.ReservationCancelled => "table-danger",
+                        _ => ""
+                    };
+
+                    <tr class="@rowClass">
+                        <td>@res.Product?.Name</td>
+                        <td>@res.Warehouse?.Name</td>
+                        <td>@res.ReservedQuantity</td>
+                        <td>@res.CreatedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                        <td>@(res.ReleasedAt?.ToString("dd.MM.yyyy HH:mm") ?? "-")</td>
+                        <td>@res.Type.GetDescription()</td>
+                        <td>@res.Status.GetDescription()</td>
+                        <td>
+                            @if (res.Status == RezervasyonDurumu.ReservationActive && res.Type == ReservationType.Manual)
+                            {
+                                <button class="btn btn-sm btn-danger" @onclick="() => CancelReservationAsync(res.Id)">
+                                    İptal Et
+                                </button>
+                            }
+                            else
+                            {
+                                <span class="text-muted small">-</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private bool isLoading = true;
+    private List<StockReservation> reservations = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        reservations = await _context.StockReservations
+            .Include(r => r.Product)
+            .Include(r => r.Warehouse)
+            .OrderByDescending(r => r.CreatedAt)
+            .ToListAsync();
+        isLoading = false;
+    }
+
+    private async Task CancelReservationAsync(int reservationId)
+    {
+        bool confirm = await JS.InvokeAsync<bool>("confirm", "Bu rezervasyonu iptal etmek istiyor musunuz?");
+        if (!confirm) return;
+
+        var userId = await UserContext.GetCurrentUserIdAsync();
+        if (string.IsNullOrEmpty(userId)) return;
+
+        await StockService.CancelReservationAsync(reservationId, userId);
+
+        // Listeyi yenile
+        reservations = await _context.StockReservations
+            .Include(r => r.Product)
+            .Include(r => r.Warehouse)
+            .OrderByDescending(r => r.CreatedAt)
+            .ToListAsync();
+    }
+}

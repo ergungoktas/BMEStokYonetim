@@ -1,0 +1,282 @@
+﻿@page "/talep/liste"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Services.Iservice
+@using Microsoft.EntityFrameworkCore
+@using System.ComponentModel
+@inject ApplicationDbContext _context
+@inject IUserContextService userContextService
+@inject NavigationManager Navigation
+
+<h3>Talep Listesi</h3>
+
+@if (isLoading)
+{
+    <p><em>Yükleniyor...</em></p>
+}
+else
+{
+    <div class="mb-3">
+        <button class="btn btn-primary" @onclick="YeniTalep">Yeni Talep Oluştur</button>
+    </div>
+
+    <!-- Filtreleme Alanları -->
+    <div class="card mb-3 p-3">
+        <div class="row g-2">
+            <div class="col-md-2">
+                <label class="form-label small">Talep No</label>
+                <input type="text" class="form-control form-control-sm" @bind="filterRequestNumber" @bind:event="oninput" placeholder="Ara..." />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Tarih</label>
+                <input type="date" class="form-control form-control-sm" @bind="filterDate" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Lokasyon</label>
+                <select class="form-select form-select-sm" @bind="filterLocationId">
+                    <option value="">Tümü</option>
+                    @foreach (var loc in allLocations)
+                    {
+                        <option value="@loc.Id">@loc.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Depo</label>
+                <select class="form-select form-select-sm" @bind="filterWarehouseId">
+                    <option value="">Tümü</option>
+                    @foreach (var wh in allWarehouses)
+                    {
+                        <option value="@wh.Id">@wh.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Ürün</label>
+                <select class="form-select form-select-sm" @bind="filterProductId">
+                    <option value="">Tümü</option>
+                    @foreach (var prod in allProducts)
+                    {
+                        <option value="@prod.Id">@prod.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Durum</label>
+                <select class="form-select form-select-sm" @bind="filterStatus">
+                    <option value="">Tümü</option>
+                    @foreach (TalepDurumu status in Enum.GetValues(typeof(TalepDurumu)))
+                    {
+                        <option value="@status">@GetEnumDescription(status)</option>
+                    }
+                </select>
+            </div>
+        </div>
+        <div class="mt-2">
+            <button class="btn btn-sm btn-secondary" @onclick="ClearFilters">Filtreleri Temizle</button>
+        </div>
+    </div>
+
+    @if (!FilteredRequests.Any())
+    {
+        <p class="text-muted">Filtreye uygun talep bulunmamaktadır.</p>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Talep No</th>
+                        <th>Tarih</th>
+                        <th>Lokasyon</th>
+                        <th>Depo</th>
+                        <th>Ürün</th>
+                        <th>Adet</th>
+                        <th>Birim</th>
+                        <th>Talep Eden</th>
+                        <th>Durum</th>
+                        <th>İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in FilteredRequests)
+                    {
+                        bool isOwner = item.Request.RequestedByUserId == currentUserId;
+
+                        <tr>
+                            <td>@item.Request.RequestNumber</td>
+                            <td>@item.Request.RequestDate.ToShortDateString()</td>
+                            <td>@item.Request.Location?.Name</td>
+                            <td>@item.Request.Warehouse?.Name</td>
+                            <td>@item.Item.Product?.Name</td>
+                            <td>@item.Item.RequestedQuantity</td>
+                            <td>@GetEnumDescription(item.Item.Product?.Unit ?? ProductUnit.Adet)</td>
+                            <td>@item.Request.RequestedByUser?.FullName</td>
+                            <td>
+                                <span class="badge @GetStatusBadgeClass(item.Item.Status)">
+                                    @GetEnumDescription(item.Item.Status)
+                                </span>
+                            </td>
+                            <td>
+                                @if (isOwner)
+                                {
+                                    <button class="btn btn-sm btn-warning me-1" @onclick="() => EditRequest(item.Request.Id)">Düzenle</button>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => DeleteRequest(item.Request.Id)">Sil</button>
+                                }
+                                else
+                                {
+                                    <span class="text-muted small">Görüntüleme</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mt-2 text-muted">
+            Toplam @FilteredRequests.Count() kayıt gösteriliyor
+        </div>
+    }
+}
+
+@code {
+    private List<Request> requests = new();
+    private List<Location> allLocations = new();
+    private List<Warehouse> allWarehouses = new();
+    private List<Product> allProducts = new();
+    private bool isLoading = true;
+    private string? currentUserId;
+
+    // Filtre değişkenleri
+    private string filterRequestNumber = string.Empty;
+    private DateTime? filterDate;
+    private int? filterLocationId;
+    private int? filterWarehouseId;
+    private int? filterProductId;
+    private TalepDurumu? filterStatus;
+
+    // Düzleştirilmiş liste
+    private class RequestItemFlat
+    {
+        public Request Request { get; set; } = null!;
+        public RequestItem Item { get; set; } = null!;
+    }
+
+    private IEnumerable<RequestItemFlat> FilteredRequests
+    {
+        get
+        {
+            var flatList = requests
+                .SelectMany(r => r.Items.Select(i => new RequestItemFlat { Request = r, Item = i }))
+                .AsEnumerable();
+
+            // Talep No filtresi
+            if (!string.IsNullOrWhiteSpace(filterRequestNumber))
+            {
+                flatList = flatList.Where(x => x.Request.RequestNumber?.Contains(filterRequestNumber, StringComparison.OrdinalIgnoreCase) == true);
+            }
+
+            // Tarih filtresi
+            if (filterDate.HasValue)
+            {
+                flatList = flatList.Where(x => x.Request.RequestDate.Date == filterDate.Value.Date);
+            }
+
+            // Lokasyon filtresi
+            if (filterLocationId.HasValue && filterLocationId > 0)
+            {
+                flatList = flatList.Where(x => x.Request.LocationId == filterLocationId);
+            }
+
+            // Depo filtresi
+            if (filterWarehouseId.HasValue && filterWarehouseId > 0)
+            {
+                flatList = flatList.Where(x => x.Request.WarehouseId == filterWarehouseId);
+            }
+
+            // Ürün filtresi
+            if (filterProductId.HasValue && filterProductId > 0)
+            {
+                flatList = flatList.Where(x => x.Item.ProductId == filterProductId);
+            }
+
+            // Durum filtresi
+            if (filterStatus.HasValue)
+            {
+                flatList = flatList.Where(x => x.Item.Status == filterStatus);
+            }
+
+            return flatList.OrderByDescending(x => x.Request.RequestDate);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUserId = await userContextService.GetCurrentUserIdAsync();
+
+        requests = await _context.Requests
+            .Include(r => r.Warehouse)
+            .Include(r => r.Location)
+            .Include(r => r.RequestedByUser)
+            .Include(r => r.Items)
+                .ThenInclude(i => i.Product)
+            .OrderByDescending(r => r.RequestDate)
+            .ToListAsync();
+
+        allLocations = await _context.Locations.OrderBy(l => l.Name).ToListAsync();
+        allWarehouses = await _context.Warehouses.OrderBy(w => w.Name).ToListAsync();
+        allProducts = await _context.Products.Where(p => p.IsActive).OrderBy(p => p.Name).ToListAsync();
+
+        isLoading = false;
+    }
+
+    private void YeniTalep() => Navigation.NavigateTo("/talep/yeni");
+    private void EditRequest(int id) => Navigation.NavigateTo($"/talep/duzenle/{id}");
+
+    private async Task DeleteRequest(int id)
+    {
+        var req = await _context.Requests.Include(r => r.Items).FirstOrDefaultAsync(r => r.Id == id);
+        if (req != null)
+        {
+            _context.RequestItems.RemoveRange(req.Items);
+            _context.Requests.Remove(req);
+            await _context.SaveChangesAsync();
+            requests.Remove(req);
+        }
+    }
+
+    private void ClearFilters()
+    {
+        filterRequestNumber = string.Empty;
+        filterDate = null;
+        filterLocationId = null;
+        filterWarehouseId = null;
+        filterProductId = null;
+        filterStatus = null;
+    }
+
+    private string GetStatusBadgeClass(TalepDurumu status)
+    {
+        return status switch
+        {
+            TalepDurumu.Open => "bg-info text-white",
+            TalepDurumu.Approved => "bg-success",
+            TalepDurumu.Rejected => "bg-danger",
+            TalepDurumu.PurchasePending => "bg-primary",
+            TalepDurumu.PurchaseApproved => "bg-success",
+            TalepDurumu.PurchaseRejected => "bg-danger",
+            TalepDurumu.PartialDelivery => "bg-warning text-dark",
+            TalepDurumu.Closed => "bg-secondary",
+            _ => "bg-secondary"
+        };
+    }
+
+    private static string GetEnumDescription(Enum value)
+    {
+        var field = value.GetType().GetField(value.ToString());
+        var attr = (DescriptionAttribute?)Attribute.GetCustomAttribute(field!, typeof(DescriptionAttribute));
+        return attr?.Description ?? value.ToString();
+    }
+}

@@ -1,0 +1,85 @@
+﻿@page "/stok/rezervasyonlar"
+@using Microsoft.EntityFrameworkCore
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@inject ApplicationDbContext _context
+@inject IUserContextService UserContext
+@inject IStockService StockService
+
+<h3>Rezervasyon Yönetimi</h3>
+
+@if (reservations == null)
+{
+    <p><em>Yükleniyor...</em></p>
+}
+else
+{
+    <table class="table table-bordered align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>Ürün</th>
+                <th>Depo</th>
+                <th>Miktar</th>
+                <th>Tür</th>
+                <th>Durum</th>
+                <th>Oluşturan</th>
+                <th>Tarih</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var r in reservations)
+            {
+                <tr class="@(r.Status == RezervasyonDurumu.ReservationExpired ? "table-warning" :
+                                                 r.Status == RezervasyonDurumu.ReservationCancelled ? "table-danger" :
+                                                 r.Type == ReservationType.Automatic ? "table-light" : "")">
+            <td>@r.Product.Name</td>
+            <td>@r.Warehouse.Name</td>
+            <td>@r.ReservedQuantity</td>
+            <td>@r.Type</td>
+            <td>@r.StatusText</td>
+            <td>@r.CreatedByUser?.UserName</td>
+            <td>@r.CreatedAt.ToString("g")</td>
+            <td>
+                @if (r.Type == ReservationType.Manual && r.IsActive)
+                        {
+                            <button class="btn btn-danger btn-sm"
+                                    @onclick="() => CancelReservationAsync(r.Id)">
+                                İptal Et
+                            </button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<StockReservation>? reservations;
+
+    protected override async Task OnInitializedAsync()
+    {
+        reservations = await _context.StockReservations
+            .Include(r => r.Product)
+            .Include(r => r.Warehouse)
+            .Include(r => r.CreatedByUser)
+            .OrderByDescending(r => r.CreatedAt)
+            .ToListAsync();
+    }
+
+    private async Task CancelReservationAsync(int id)
+    {
+        var userId = await UserContext.GetCurrentUserIdAsync();
+        if (string.IsNullOrEmpty(userId))
+            return;
+
+        await StockService.CancelReservationAsync(id, userId);
+        reservations = await _context.StockReservations
+            .Include(r => r.Product)
+            .Include(r => r.Warehouse)
+            .Include(r => r.CreatedByUser)
+            .OrderByDescending(r => r.CreatedAt)
+            .ToListAsync();
+    }
+}

@@ -1,0 +1,123 @@
+﻿@page "/tanimlar/tedarikci"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext _context
+
+<h3>Tedarikçi Tanımları</h3>
+
+<EditForm Model="model" OnValidSubmit="Save">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="row mb-2">
+        <div class="col"><InputText class="form-control" placeholder="Firma Adı" @bind-Value="model.CompanyName" /></div>
+        <div class="col"><InputText class="form-control" placeholder="Adres" @bind-Value="model.ContactAddress" /></div>
+        <div class="col"><InputText class="form-control" placeholder="Telefon" @bind-Value="model.Phone" /></div>
+    </div>
+    <div class="row mb-2">
+        <div class="col"><InputText class="form-control" placeholder="E-posta" @bind-Value="model.Email" /></div>
+        <div class="col"><InputText class="form-control" placeholder="İlgili Kişi" @bind-Value="model.ContactPerson" /></div>
+        <div class="col"><InputText class="form-control" placeholder="Vergi No" @bind-Value="model.TaxNumber" /></div>
+        <div class="col"><InputText class="form-control" placeholder="Vergi Dairesi" @bind-Value="model.TaxOffice" /></div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-primary">@((model.Id==0)?"Ekle":"Güncelle")</button>
+            @if(model.Id!=0)
+            {
+                <button type="button" class="btn btn-secondary" @onclick="CancelEdit">İptal</button>
+            }
+        </div>
+    </div>
+</EditForm>
+
+<hr />
+<button class="btn btn-info mb-2" @onclick="ToggleList">Listeyi GÃ¶ster/Gizle</button>
+
+@if(showList)
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Firma Adı</th>
+                <th>Adres</th>
+                <th>Telefon</th>
+                <th>E-posta</th>
+                <th>İlgili Kişi</th>
+                <th>Vergi No</th>
+                <th>Vergi Dairesi</th>
+                <th>İşlemler</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach(var item in list)
+        {
+            <tr>
+                <td>@item.CompanyName</td>
+                <td>@item.ContactAddress</td>
+                <td>@item.Phone</td>
+                <td>@item.Email</td>
+                <td>@item.ContactPerson</td>
+                <td>@item.TaxNumber</td>
+                <td>@item.TaxOffice</td>
+                <td>
+                    <button class="btn btn-sm btn-warning" @onclick="()=>Edit(item)">Düzenle</button>
+                    <button class="btn btn-sm btn-danger" @onclick="()=>Delete(item.Id)">Sil</button>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    private Supplier model = new();
+    private List<Supplier> list = new();
+    private bool showList;
+
+    private async Task ToggleList()
+    {
+        if (!showList)
+            list = await _context.Suppliers.ToListAsync();
+
+        showList = !showList;
+    }
+
+    private async Task Save()
+    {
+        if (model.Id == 0)
+            _context.Suppliers.Add(model);
+        else
+            _context.Suppliers.Update(model);
+
+        await _context.SaveChangesAsync();
+        model = new();
+        list = await _context.Suppliers.ToListAsync();
+        showList = true;
+    }
+
+    private void Edit(Supplier item) => model = new Supplier
+    {
+        Id = item.Id,
+        CompanyName = item.CompanyName,
+        ContactAddress = item.ContactAddress,
+        Phone = item.Phone,
+        Email = item.Email,
+        ContactPerson = item.ContactPerson,
+        TaxNumber = item.TaxNumber,
+        TaxOffice = item.TaxOffice
+    };
+
+    private async Task Delete(int id)
+    {
+        var entity = await _context.Suppliers.FindAsync(id);
+        if (entity != null)
+        {
+            _context.Suppliers.Remove(entity);
+            await _context.SaveChangesAsync();
+            list = await _context.Suppliers.ToListAsync();
+        }
+    }
+
+    private void CancelEdit() => model = new();
+}
