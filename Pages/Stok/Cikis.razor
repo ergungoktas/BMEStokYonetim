@@ -1,15 +1,18 @@
-﻿@page "/stok/cikis"
+@page "/stok/cikis"
+@using System.ComponentModel.DataAnnotations
 @using BMEStokYonetim.Data
 @using BMEStokYonetim.Data.Entities
 @using BMEStokYonetim.Helpers
+@using BMEStokYonetim.Services.Iservice
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.EntityFrameworkCore
-@using System.ComponentModel.DataAnnotations
 @inject ApplicationDbContext _context
+@inject IUserContextService UserContext
+@inject IStockService StockService
 
 <PageTitle>Stok Çıkışı</PageTitle>
 
-<h4>Stok Çıkışı</h4>
+<h3 class="mb-3">Stok Çıkışı</h3>
 
 @if (isLoading)
 {
@@ -27,109 +30,187 @@ else
         <div class="alert alert-success">@successMessage</div>
     }
 
-    if (editContext is not null)
+    <EditForm EditContext="editContext" OnValidSubmit="HandleValidSubmit">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">Ürün</label>
+                <InputSelect class="form-select"
+                             TValue="int?"
+                             Value="model.ProductId"
+                             ValueChanged="OnProductChanged"
+                             ValueExpression="() => model.ProductId">
+                    <option value="">Ürün seçiniz</option>
+                    @foreach (Product product in products)
+                    {
+                        <option value="@product.Id">@product.Code - @product.Name (@product.Unit.GetDescription())</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => model.ProductId" />
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">Çıkış Deposu</label>
+                <InputSelect class="form-select"
+                             TValue="int?"
+                             Value="model.SourceWarehouseId"
+                             ValueChanged="OnSourceWarehouseChanged"
+                             ValueExpression="() => model.SourceWarehouseId"
+                             disabled="@(selectedProductStocks.Count == 0)">
+                    <option value="">Depo seçiniz</option>
+                    @foreach (Warehouse warehouse in warehouses)
+                    {
+                        <option value="@warehouse.Id">@warehouse.Name</option>
+                    }
+                </InputSelect>
+                <ValidationMessage For="() => model.SourceWarehouseId" />
+                @if (model.SourceWarehouseId.HasValue)
+                {
+                    int? available = GetAvailableForSelectedWarehouse();
+                    <small class="text-muted">Mevcut çıkılabilir stok: @(available?.ToString() ?? "0")</small>
+                }
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Miktar</label>
+                <InputNumber class="form-control" @bind-Value="model.Quantity" min="1" />
+                <ValidationMessage For="() => model.Quantity" />
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Birim</label>
+                <InputText class="form-control" Value="@model.Unit.GetDescription()" readonly />
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Evrak No</label>
+                <InputText class="form-control" @bind-Value="model.DocumentNumber" />
+                <ValidationMessage For="() => model.DocumentNumber" />
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Talep Kalemi (opsiyonel)</label>
+                <InputNumber class="form-control" @bind-Value="model.RequestItemId" />
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Varlık / Araç (opsiyonel)</label>
+                <InputNumber class="form-control" @bind-Value="model.AssetId" />
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">KM (opsiyonel)</label>
+                <InputNumber class="form-control" @bind-Value="model.Km" />
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label">Çalışma Saati (opsiyonel)</label>
+                <InputNumber class="form-control" @bind-Value="model.HourMeter" />
+            </div>
+
+            <div class="col-12">
+                <label class="form-label">Açıklama</label>
+                <InputTextArea class="form-control" rows="3" @bind-Value="model.Description" />
+            </div>
+        </div>
+
+        <div class="mt-4 d-flex gap-2">
+            <button class="btn btn-primary" type="submit" disabled="@isSubmitting">Kaydet</button>
+            <button class="btn btn-secondary" type="button" @onclick="ResetForm" disabled="@isSubmitting">Temizle</button>
+        </div>
+    </EditForm>
+
+    if (model.ProductId.HasValue)
     {
-        <EditForm EditContext="editContext" OnValidSubmit="HandleValidSubmit">
-            <DataAnnotationsValidator />
-            <ValidationSummary />
-
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label">Ürün</label>
-                    <InputSelect class="form-select"
-                                 TValue="int?"
-                                 Value="model.ProductId"
-                                 ValueChanged="OnProductChanged"
-                                 ValueExpression="() => model.ProductId">
-                        <option value="">Ürün seçiniz</option>
-                        @foreach (var product in products)
-                        {
-                            <option value="@product.Id">@product.Code - @product.Name</option>
-                        }
-                    </InputSelect>
-                    <ValidationMessage For="() => model.ProductId" />
-                </div>
-
-                <div class="col-md-3">
-                    <label class="form-label">Miktar</label>
-                    <InputNumber class="form-control" @bind-Value="model.Quantity" />
-                    <ValidationMessage For="() => model.Quantity" />
-                </div>
-
-                <div class="col-md-3">
-                    <label class="form-label">Birim</label>
-                    <InputText class="form-control" Value="@model.UnitText" readonly />
-                </div>
-
-                <div class="col-md-4">
-                    <label class="form-label">Çıkış Lokasyonu</label>
-                    <InputSelect class="form-select"
-                                 TValue="int?"
-                                 Value="model.SourceLocationId"
-                                 ValueChanged="OnSourceLocationChanged"
-                                 ValueExpression="() => model.SourceLocationId">
-                        <option value="">Lokasyon seçiniz</option>
-                        @foreach (var location in locations)
-                        {
-                            <option value="@location.Id">@location.Name</option>
-                        }
-                    </InputSelect>
-                    <ValidationMessage For="() => model.SourceLocationId" />
-                </div>
-
-                <div class="col-md-4">
-                    <label class="form-label">Hedef Lokasyon</label>
-                    <InputSelect class="form-select"
-                                 TValue="int?"
-                                 Value="model.TargetLocationId"
-                                 ValueChanged="OnTargetLocationChanged"
-                                 ValueExpression="() => model.TargetLocationId">
-                        <option value="">Lokasyon seçiniz</option>
-                        @foreach (var location in locations)
-                        {
-                            <option value="@location.Id">@location.Name</option>
-                        }
-                    </InputSelect>
-                </div>
-
-                <div class="col-md-4">
-                    <label class="form-label">İşlem Tarihi</label>
-                    <InputDate class="form-control" @bind-Value="model.MovementDate" />
-                </div>
-
-                <div class="col-md-4">
-                    <div class="form-check mt-4">
-                        <InputCheckbox class="form-check-input" @bind-Value="model.IsUrgent" />
-                        <label class="form-check-label">Acil Çıkış</label>
+        <div class="card mt-4">
+            <div class="card-header">Seçili Ürünün Depo Bazlı Stok Durumu</div>
+            <div class="card-body p-0">
+                @if (selectedProductStocks.Count == 0)
+                {
+                    <div class="p-3">Bu ürün için tanımlı stok bulunmuyor.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Depo</th>
+                                    <th>Toplam</th>
+                                    <th>Rezerve</th>
+                                    <th>Uygun</th>
+                                    <th>Son Güncelleme</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (WarehouseStock stock in selectedProductStocks)
+                                {
+                                    <tr>
+                                        <td>@stock.Warehouse.Name</td>
+                                        <td>@stock.Quantity</td>
+                                        <td>@stock.ReservedQuantity</td>
+                                        <td>@stock.AvailableQuantity</td>
+                                        <td>@stock.LastUpdated.ToString("g")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
                     </div>
-                </div>
-
-                <div class="col-md-4">
-                    <label class="form-label">Evrak No</label>
-                    <InputText class="form-control" @bind-Value="model.DocumentNumber" />
-                </div>
-
-                <div class="col-12">
-                    <label class="form-label">Açıklama</label>
-                    <InputTextArea class="form-control" @bind-Value="model.Description" rows="3" />
-                </div>
+                }
             </div>
+        </div>
+    }
 
-            <div class="mt-4 d-flex gap-2">
-                <button class="btn btn-primary" type="submit" disabled="@isSubmitting">Kaydet</button>
-                <button class="btn btn-secondary" type="button" @onclick="ResetForm" disabled="@isSubmitting">Temizle</button>
-            </div>
-        </EditForm>
-    }
-    else
-    {
-        <div class="alert alert-danger">Form başlatılamadı.</div>
-    }
+    <div class="card mt-4">
+        <div class="card-header">Son 10 Stok Çıkışı</div>
+        <div class="card-body p-0">
+            @if (!recentMovements.Any())
+            {
+                <div class="p-3">Henüz stok çıkışı yapılmamış.</div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Tarih</th>
+                                <th>Ürün</th>
+                                <th>Depo</th>
+                                <th>Miktar</th>
+                                <th>Evrak</th>
+                                <th>Kullanıcı</th>
+                                <th>Açıklama</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (StockMovement movement in recentMovements)
+                            {
+                                <tr>
+                                    <td>@movement.MovementDate.ToString("g")</td>
+                                    <td>@movement.Product?.Name</td>
+                                    <td>@movement.SourceWarehouse?.Name</td>
+                                    <td>@movement.Quantity @movement.Unit.GetDescription()</td>
+                                    <td>@movement.DocumentNumber</td>
+                                    <td>@movement.User?.UserName</td>
+                                    <td>@movement.Description</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
 }
 
 @code {
     private readonly List<Product> products = new();
-    private readonly List<Location> locations = new();
+    private readonly List<Warehouse> warehouses = new();
+    private readonly List<WarehouseStock> selectedProductStocks = new();
+    private readonly List<StockMovement> recentMovements = new();
 
     private StockExitModel model = new();
     private EditContext? editContext;
@@ -141,6 +222,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         await LoadLookupsAsync();
+        await LoadRecentMovementsAsync();
 
         ResetModel();
         editContext = new EditContext(model);
@@ -149,11 +231,73 @@ else
 
     private async Task LoadLookupsAsync()
     {
-        var productList = await _context.Products.AsNoTracking().OrderBy(p => p.Name).ToListAsync();
-        var locationList = await _context.Locations.AsNoTracking().OrderBy(l => l.Name).ToListAsync();
+        List<Product> productList = await _context.Products
+            .AsNoTracking()
+            .OrderBy(p => p.Name)
+            .ToListAsync();
 
-        products.Clear(); products.AddRange(productList);
-        locations.Clear(); locations.AddRange(locationList);
+        List<Warehouse> warehouseList = await _context.Warehouses
+            .AsNoTracking()
+            .OrderBy(w => w.Name)
+            .ToListAsync();
+
+        products.Clear();
+        products.AddRange(productList);
+
+        warehouses.Clear();
+        warehouses.AddRange(warehouseList);
+    }
+
+    private async Task LoadRecentMovementsAsync()
+    {
+        List<StockMovement> movements = await _context.StockMovements
+            .AsNoTracking()
+            .Include(sm => sm.Product)
+            .Include(sm => sm.SourceWarehouse)
+            .Include(sm => sm.User)
+            .Where(sm => sm.MovementType == MovementType.Out)
+            .OrderByDescending(sm => sm.MovementDate)
+            .ThenByDescending(sm => sm.Id)
+            .Take(10)
+            .ToListAsync();
+
+        recentMovements.Clear();
+        recentMovements.AddRange(movements);
+    }
+
+    private async Task OnProductChanged(int? productId)
+    {
+        model.ProductId = productId;
+
+        Product? product = products.FirstOrDefault(p => p.Id == productId);
+        model.Unit = product?.Unit ?? ProductUnit.None;
+
+        await LoadStocksForProductAsync();
+        model.SourceWarehouseId = null;
+        editContext?.NotifyFieldChanged(FieldIdentifier.Create(() => model.SourceWarehouseId));
+    }
+
+    private Task OnSourceWarehouseChanged(int? warehouseId)
+    {
+        model.SourceWarehouseId = warehouseId;
+        return Task.CompletedTask;
+    }
+
+    private async Task LoadStocksForProductAsync()
+    {
+        selectedProductStocks.Clear();
+
+        if (model.ProductId.HasValue)
+        {
+            List<WarehouseStock> stocks = await _context.WarehouseStocks
+                .AsNoTracking()
+                .Include(ws => ws.Warehouse)
+                .Where(ws => ws.ProductId == model.ProductId.Value)
+                .OrderBy(ws => ws.Warehouse.Name)
+                .ToListAsync();
+
+            selectedProductStocks.AddRange(stocks);
+        }
     }
 
     private async Task HandleValidSubmit()
@@ -161,9 +305,18 @@ else
         errorMessage = null;
         successMessage = null;
 
-        if (!model.ProductId.HasValue || !model.SourceLocationId.HasValue)
+        if (!model.ProductId.HasValue || !model.SourceWarehouseId.HasValue)
         {
-            errorMessage = "Ürün ve çıkış lokasyonu seçilmelidir.";
+            errorMessage = "Ürün ve çıkış deposu seçilmelidir.";
+            return;
+        }
+
+        WarehouseStock? stock = selectedProductStocks
+            .FirstOrDefault(ws => ws.WarehouseId == model.SourceWarehouseId.Value);
+
+        if (stock == null || stock.AvailableQuantity < model.Quantity)
+        {
+            errorMessage = "Seçilen depoda yeterli stok bulunmuyor.";
             return;
         }
 
@@ -171,31 +324,34 @@ else
 
         try
         {
-            var entity = new StockMovement
+            string? userId = await UserContext.GetCurrentUserIdAsync();
+            if (string.IsNullOrEmpty(userId))
             {
-                ProductId = model.ProductId.Value,
-                MovementType = MovementType.Out,   // ✅ enum
-                Quantity = model.Quantity,
-                Unit = model.Unit,                 // ✅ enum kaydediliyor
-                MovementDate = model.MovementDate,
-                Description = model.Description,
-                DocumentNumber = model.DocumentNumber,
-                SourceLocationId = model.SourceLocationId.Value,
-                TargetLocationId = model.TargetLocationId,
-                IsUrgent = model.IsUrgent
-            };
+                throw new InvalidOperationException("Kullanıcı bilgisi alınamadı.");
+            }
 
-            _context.StockMovements.Add(entity);
-            await _context.SaveChangesAsync();
+            await StockService.StockExitAsync(
+                model.ProductId.Value,
+                model.Quantity,
+                model.SourceWarehouseId.Value,
+                userId,
+                model.DocumentNumber,
+                model.Description,
+                model.AssetId,
+                model.RequestItemId,
+                model.Km,
+                model.HourMeter);
 
             successMessage = "Stok çıkışı başarıyla kaydedildi.";
-            ResetModel();
+
+            await LoadStocksForProductAsync();
+            await LoadRecentMovementsAsync();
+            ResetModel(model.ProductId);
             editContext = new EditContext(model);
         }
         catch (Exception ex)
         {
-            errorMessage = $"Stok çıkışı kaydedilirken hata: {ex.Message}";
-            Console.Error.WriteLine(ex);
+            errorMessage = $"Stok çıkışı kaydedilirken hata oluştu: {ex.Message}";
         }
         finally
         {
@@ -203,51 +359,38 @@ else
         }
     }
 
-    private Task OnProductChanged(int? productId)
-    {
-        model.ProductId = productId;
-
-        if (productId.HasValue)
-        {
-            var product = products.FirstOrDefault(p => p.Id == productId.Value);
-            if (product != null)
-                model.Unit = product.Unit; // ✅ Enum set ediliyor
-        }
-        else
-        {
-            model.Unit = default;
-        }
-
-        return Task.CompletedTask;
-    }
-
-    private Task OnSourceLocationChanged(int? locationId)
-    {
-        model.SourceLocationId = locationId;
-        return Task.CompletedTask;
-    }
-
-    private Task OnTargetLocationChanged(int? locationId)
-    {
-        model.TargetLocationId = locationId;
-        return Task.CompletedTask;
-    }
-
     private void ResetForm()
     {
-        ResetModel();
+        int? selectedProductId = model.ProductId;
+        ResetModel(selectedProductId);
         editContext = new EditContext(model);
         successMessage = null;
         errorMessage = null;
     }
 
-    private void ResetModel()
+    private void ResetModel(int? keepProductId = null)
     {
         model = new StockExitModel
         {
-            MovementDate = DateTime.Today,
-            Quantity = 1
+            ProductId = keepProductId,
+            Quantity = 1,
+            Unit = products.FirstOrDefault(p => p.Id == keepProductId)?.Unit ?? ProductUnit.None,
+            DocumentNumber = $"C-{DateTime.Now:yyyyMMddHHmm}",
+            SourceWarehouseId = null
         };
+    }
+
+    private int? GetAvailableForSelectedWarehouse()
+    {
+        if (!model.SourceWarehouseId.HasValue)
+        {
+            return null;
+        }
+
+        WarehouseStock? stock = selectedProductStocks
+            .FirstOrDefault(ws => ws.WarehouseId == model.SourceWarehouseId.Value);
+
+        return stock?.AvailableQuantity;
     }
 
     private class StockExitModel
@@ -256,25 +399,25 @@ else
         public int? ProductId { get; set; }
 
         [Range(1, int.MaxValue, ErrorMessage = "Miktar 1 veya daha büyük olmalıdır.")]
-        public int Quantity { get; set; }
+        public int Quantity { get; set; } = 1;
 
-        public ProductUnit Unit { get; set; }   // ✅ Enum
+        public ProductUnit Unit { get; set; } = ProductUnit.None;
 
-        public string UnitText => Unit.GetDescription(); // ekranda gösterim
-
-        [Required(ErrorMessage = "Çıkış lokasyonu seçiniz.")]
-        public int? SourceLocationId { get; set; }
-
-        public int? TargetLocationId { get; set; }
-
-        public DateTime MovementDate { get; set; } = DateTime.Today;
-
-        public bool IsUrgent { get; set; }
+        [Required(ErrorMessage = "Depo seçiniz.")]
+        public int? SourceWarehouseId { get; set; }
 
         [StringLength(50)]
-        public string? DocumentNumber { get; set; }
+        public string DocumentNumber { get; set; } = string.Empty;
 
         [StringLength(500)]
         public string? Description { get; set; }
+
+        public int? RequestItemId { get; set; }
+
+        public int? AssetId { get; set; }
+
+        public int? Km { get; set; }
+
+        public int? HourMeter { get; set; }
     }
 }

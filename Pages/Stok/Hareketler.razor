@@ -1,2 +1,115 @@
 ﻿@page "/stok/hareketler"
-<h4>Stok Hareketleri</h4>
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@inject ApplicationDbContext _context
+
+<h3>Stok Hareketleri</h3>
+
+<div class="mb-3">
+    <div class="row g-2">
+        <div class="col-md-3">
+            <label class="form-label">Başlangıç</label>
+            <InputDate class="form-control" @bind-Value="filterStart" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Bitiş</label>
+            <InputDate class="form-control" @bind-Value="filterEnd" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Tür</label>
+            <InputSelect class="form-select" @bind-Value="filterMovementType">
+                <option value="">Tümü</option>
+                <option value="@MovementType.In">Giriş</option>
+                <option value="@MovementType.Out">Çıkış</option>
+                <option value="@MovementType.Transfer">Transfer</option>
+            </InputSelect>
+        </div>
+        <div class="col-md-3 d-grid">
+            <button class="btn btn-primary" @onclick="FilterAsync">Filtrele</button>
+        </div>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <p><em>Veriler yükleniyor...</em></p>
+}
+else
+{
+    <table class="table table-bordered table-sm">
+        <thead class="table-light">
+            <tr>
+                <th>Tarih</th>
+                <th>Tür</th>
+                <th>Ürün</th>
+                <th>Miktar</th>
+                <th>Depo</th>
+                <th>Açıklama</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (!movements.Any())
+            {
+                <tr><td colspan="6" class="text-center">Kayıt bulunamadı.</td></tr>
+            }
+            else
+            {
+                @foreach (var m in movements)
+                {
+                    <tr>
+                        <td>@m.MovementDate.ToString("dd.MM.yyyy")</td>
+                        <td>@m.MovementType</td>
+                        <td>@m.Product?.Name</td>
+                        <td>@m.Quantity @m.Unit</td>
+                        <td>@m.TargetWarehouse?.Name</td>
+                        <td>@m.Description</td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<StockMovement> movements = new();
+    private bool isLoading = true;
+
+    private DateTime? filterStart = DateTime.Today.AddDays(-30);
+    private DateTime? filterEnd = DateTime.Today;
+    private MovementType? filterMovementType;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMovementsAsync();
+        isLoading = false;
+    }
+
+    private async Task FilterAsync()
+    {
+        isLoading = true;
+        await LoadMovementsAsync();
+        isLoading = false;
+    }
+
+    private async Task LoadMovementsAsync()
+    {
+        IQueryable<StockMovement> query = _context.StockMovements
+            .Include(sm => sm.Product)
+            .Include(sm => sm.TargetWarehouse)
+            .AsNoTracking();
+
+        if (filterStart.HasValue)
+            query = query.Where(sm => sm.MovementDate >= filterStart.Value);
+
+        if (filterEnd.HasValue)
+            query = query.Where(sm => sm.MovementDate <= filterEnd.Value);
+
+        if (filterMovementType.HasValue)
+            query = query.Where(sm => sm.MovementType == filterMovementType.Value);
+
+        movements = await query
+            .OrderByDescending(sm => sm.MovementDate)
+            .Take(200)
+            .ToListAsync();
+    }
+}
