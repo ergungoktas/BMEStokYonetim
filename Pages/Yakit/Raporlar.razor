@@ -1,2 +1,196 @@
 ﻿@page "/yakit/raporlar"
-<h4>Yakıt Raporları</h4>
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Models
+@using BMEStokYonetim.Services.Iservice
+@using Microsoft.AspNetCore.Components.Forms
+@inject IFuelService FuelService
+
+<PageTitle>Yakıt Raporları</PageTitle>
+
+<h3 class="mb-3">Yakıt Raporları</h3>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">Başlangıç Tarihi</label>
+                <InputDate class="form-control" @bind-Value="filterStart" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Bitiş Tarihi</label>
+                <InputDate class="form-control" @bind-Value="filterEnd" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">İstasyon</label>
+                <InputSelect class="form-select" @bind-Value="filterStationId">
+                    <option value="">Tümü</option>
+                    @foreach (AkaryakitIstasyon station in stations)
+                    {
+                        <option value="@station.IstasyonID">@station.Ad</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="col-12 d-grid">
+                <button class="btn btn-primary" @onclick="LoadReportAsync">Raporu Getir</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <p><em>Rapor hazırlanıyor...</em></p>
+}
+else
+{
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-primary h-100">
+                <div class="card-body text-center">
+                    <h6 class="text-primary">Toplam İstasyon</h6>
+                    <p class="display-6">@dashboard.TotalStations</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-success h-100">
+                <div class="card-body text-center">
+                    <h6 class="text-success">Toplam Giriş (L)</h6>
+                    <p class="display-6">@dashboard.TotalEntries</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-danger h-100">
+                <div class="card-body text-center">
+                    <h6 class="text-danger">Toplam Çıkış (L)</h6>
+                    <p class="display-6">@dashboard.TotalExits</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-info h-100">
+                <div class="card-body text-center">
+                    <h6 class="text-info">Net Bakiye (L)</h6>
+                    <p class="display-6">@dashboard.NetBalance</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5>Günlük Ortalama Çıkış</h5>
+                    <p class="display-6 text-danger">@dashboard.AverageDailyExit</p>
+                    <small class="text-muted">Seçilen tarih aralığına göre ortalama.</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5>En Yoğun İstasyon</h5>
+                    @if (dashboard.BusiestStation is null)
+                    {
+                        <p class="text-muted">Veri bulunamadı.</p>
+                    }
+                    else
+                    {
+                        <p class="fs-4">@dashboard.BusiestStation.StationName</p>
+                        <p class="mb-0">Toplam Çıkış: <strong>@dashboard.BusiestStation.TotalExit</strong> L</p>
+                        <p class="mb-0">Toplam Giriş: <strong>@dashboard.BusiestStation.TotalEntry</strong> L</p>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Yakıt Hareketleri</div>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Tarih</th>
+                        <th>Tür</th>
+                        <th>İstasyon</th>
+                        <th>Miktar (L)</th>
+                        <th>Hedef / Detay</th>
+                        <th>Açıklama</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!movements.Any())
+                    {
+                        <tr>
+                            <td colspan="6" class="text-center">Veri bulunamadı.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (FuelMovementDto movement in movements)
+                        {
+                            string badgeClass = movement.MovementType == FuelMovementType.Entry ? "bg-success" : "bg-danger";
+                            string movementText = movement.MovementType == FuelMovementType.Entry ? "Giriş" : "Çıkış";
+
+                            <tr>
+                                <td>@movement.Date.ToString("g")</td>
+                                <td><span class="badge @badgeClass">@movementText</span></td>
+                                <td>@movement.StationName</td>
+                                <td>@movement.QuantityLitre</td>
+                                <td>
+                                    @if (movement.MovementType == FuelMovementType.Exit)
+                                    {
+                                        <span>@movement.TargetType @if (movement.TargetId.HasValue) {<span>(@movement.TargetId)</span>}</span>
+                                        @if (movement.Km.HasValue)
+                                        {
+                                            <div>KM: @movement.Km</div>
+                                        }
+                                        @if (movement.HourMeter.HasValue)
+                                        {
+                                            <div>Saat: @movement.HourMeter</div>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span>-</span>
+                                    }
+                                </td>
+                                <td>@movement.Description</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private List<AkaryakitIstasyon> stations = new();
+    private FuelDashboardDto dashboard = new();
+    private List<FuelMovementDto> movements = new();
+
+    private DateTime? filterStart = DateTime.Today.AddDays(-30);
+    private DateTime? filterEnd = DateTime.Today;
+    private int? filterStationId;
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        stations = await FuelService.GetStationsAsync();
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        isLoading = true;
+        dashboard = await FuelService.GetDashboardAsync(filterStart, filterEnd, filterStationId);
+        movements = (await FuelService.GetMovementsAsync(filterStart, filterEnd, filterStationId))
+            .OrderByDescending(m => m.Date)
+            .ToList();
+        isLoading = false;
+    }
+}
