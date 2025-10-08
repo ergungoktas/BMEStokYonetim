@@ -27,9 +27,7 @@ namespace BMEStokYonetim.Data
         public DbSet<Maintenance> Maintenances => Set<Maintenance>();
         public DbSet<MaintenancePart> MaintenanceParts => Set<MaintenancePart>();
         public DbSet<MaintenancePersonnel> MaintenancePersonnels => Set<MaintenancePersonnel>();
-        public DbSet<AkaryakitIstasyon> AkaryakitIstasyonlar => Set<AkaryakitIstasyon>();
-        public DbSet<AkaryakitGiris> AkaryakitGirisler => Set<AkaryakitGiris>();
-        public DbSet<AkaryakitCikis> AkaryakitCikislar => Set<AkaryakitCikis>();
+
         public DbSet<WarehouseStock> WarehouseStocks => Set<WarehouseStock>();
         public DbSet<Warehouse> Warehouses => Set<Warehouse>();
         public DbSet<StockReservation> StockReservations => Set<StockReservation>();

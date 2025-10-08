@@ -1,6 +1,24 @@
+
 .vs/
 bin/
 obj/
-.vs/
+# Build çýktýlarý
 bin/
 obj/
+[Bb]uild/
+[Ll]ogs/
+
+# Kullanýcý/IDE
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+
+# Paketler
+packages/
+*.nupkg
+
+# Yaygýn
+*.DS_Store
+Thumbs.db

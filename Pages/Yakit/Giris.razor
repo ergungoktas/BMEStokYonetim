@@ -1,192 +1,230 @@
 ﻿@page "/yakit/giris"
-@using System.ComponentModel.DataAnnotations
+@using BMEStokYonetim.Data
 @using BMEStokYonetim.Data.Entities
-@using BMEStokYonetim.Models
-@using BMEStokYonetim.Services.Iservice
+@using Microsoft.EntityFrameworkCore
 @using Microsoft.AspNetCore.Components.Forms
-@inject IFuelService FuelService
+@inject IDbContextFactory<ApplicationDbContext> ContextFactory
+@inject IUserContextService UserContext
+@inject NavigationManager Nav
 
-<PageTitle>Yakıt Girişleri</PageTitle>
+<PageTitle>Yakıt Girişi</PageTitle>
 
-<h3 class="mb-3">Yakıt Girişleri</h3>
+<h3 class="mb-3">Yakıt Girişi</h3>
 
-<div class="row g-3">
-    <div class="col-lg-4">
-        <div class="card">
-            <div class="card-header">Yeni Yakıt Girişi</div>
-            <div class="card-body">
-                @if (!string.IsNullOrWhiteSpace(successMessage))
-                {
-                    <div class="alert alert-success">@successMessage</div>
-                }
-                @if (!string.IsNullOrWhiteSpace(errorMessage))
-                {
-                    <div class="alert alert-danger">@errorMessage</div>
-                }
+@if (loading)
+{
+    <div class="alert alert-info">Yükleniyor...</div>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="alert alert-danger">@error</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(success))
+    {
+        <div class="alert alert-success">@success</div>
+    }
 
-                <EditForm Model="entryModel" OnValidSubmit="SaveEntryAsync">
-                    <DataAnnotationsValidator />
-                    <ValidationSummary />
+    <EditForm Model="@model" OnValidSubmit="@HandleSave">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
 
-                    <div class="mb-3">
-                        <label class="form-label">İstasyon</label>
-                        <InputSelect class="form-select" @bind-Value="entryModel.StationId">
-                            <option value="">Seçiniz</option>
-                            @foreach (AkaryakitIstasyon station in stations)
-                            {
-                                <option value="@station.IstasyonID">@station.Ad (@station.Tip)</option>
-                            }
-                        </InputSelect>
-                        <ValidationMessage For="() => entryModel.StationId" />
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Tarih</label>
-                        <InputDate class="form-control" @bind-Value="entryModel.Date" />
-                        <ValidationMessage For="() => entryModel.Date" />
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Miktar (Litre)</label>
-                        <InputNumber class="form-control" @bind-Value="entryModel.Quantity" min="1" />
-                        <ValidationMessage For="() => entryModel.Quantity" />
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Açıklama</label>
-                        <InputTextArea class="form-control" rows="3" @bind-Value="entryModel.Description" />
-                    </div>
-
-                    <button class="btn btn-primary" type="submit">Kaydet</button>
-                </EditForm>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Depo</label>
+                <InputSelect class="form-select" @bind-Value="model.TargetWarehouseId">
+                    <option value="0">Seçiniz</option>
+                    @foreach (var wh in warehouses)
+                    {
+                        <option value="@wh.Id">@wh.Code - @wh.Name</option>
+                    }
+                </InputSelect>
             </div>
-        </div>
-    </div>
-    <div class="col-lg-8">
-        <div class="card mb-3">
-            <div class="card-body">
-                <div class="row g-3 align-items-end">
-                    <div class="col-md-4">
-                        <label class="form-label">Başlangıç Tarihi</label>
-                        <InputDate class="form-control" @bind-Value="filterStart" />
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Bitiş Tarihi</label>
-                        <InputDate class="form-control" @bind-Value="filterEnd" />
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">İstasyon</label>
-                        <InputSelect class="form-select" @bind-Value="filterStationId">
-                            <option value="">Tümü</option>
-                            @foreach (AkaryakitIstasyon station in stations)
-                            {
-                                <option value="@station.IstasyonID">@station.Ad</option>
-                            }
-                        </InputSelect>
-                    </div>
-                    <div class="col-12 d-grid">
-                        <button class="btn btn-outline-primary" @onclick="LoadEntriesAsync">Filtrele</button>
-                    </div>
-                </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Ürün</label>
+                <InputSelect class="form-select" @bind-Value="SelectedProductId">
+                    <option value="0">Seçiniz</option>
+                    @foreach (var p in products)
+                    {
+                        <option value="@p.Id">@p.Code - @p.Name</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">Miktar</label>
+                <InputNumber class="form-control" @bind-Value="model.Quantity" />
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">Birim</label>
+                <input class="form-control" value="@unitText" disabled />
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Belge No</label>
+                <InputText class="form-control" @bind-Value="model.DocumentNumber" />
+            </div>
+
+            <div class="col-md-8">
+                <label class="form-label">Açıklama</label>
+                <InputText class="form-control" @bind-Value="model.Description" />
             </div>
         </div>
 
-        <div class="card">
-            <div class="card-header">Kayıtlı Girişler</div>
-            <div class="table-responsive">
-                <table class="table table-striped mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Tarih</th>
-                            <th>İstasyon</th>
-                            <th>Miktar (L)</th>
-                            <th>Açıklama</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @if (!entries.Any())
-                        {
-                            <tr>
-                                <td colspan="4" class="text-center">Kayıt bulunamadı.</td>
-                            </tr>
-                        }
-                        else
-                        {
-                            @foreach (FuelMovementDto entry in entries)
-                            {
-                                <tr>
-                                    <td>@entry.Date.ToString("g")</td>
-                                    <td>@entry.StationName</td>
-                                    <td>@entry.QuantityLitre</td>
-                                    <td>@entry.Description</td>
-                                </tr>
-                            }
-                        }
-                    </tbody>
-                </table>
-            </div>
+        <div class="mt-3 d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-plus-circle me-1"></i> Girişi Kaydet
+            </button>
+            <button type="button" class="btn btn-secondary" @onclick="GoHome">Panele Dön</button>
         </div>
-    </div>
-</div>
+    </EditForm>
+}
 
 @code {
-    private List<AkaryakitIstasyon> stations = new();
-    private List<FuelMovementDto> entries = new();
-    private FuelEntryModel entryModel = new();
-    private string? successMessage;
-    private string? errorMessage;
+    private bool loading = true;
+    private string? error;
+    private string? success;
 
-    private DateTime? filterStart = DateTime.Today.AddDays(-30);
-    private DateTime? filterEnd = DateTime.Today;
-    private int? filterStationId;
+    private List<Warehouse> warehouses = new();
+    private List<Product> products = new();
+
+    private MovementInput model = new();
+    private string unitText = "Litre";
+
+    private int SelectedProductId
+    {
+        get => model.ProductId;
+        set
+        {
+            model.ProductId = value;
+            _ = UpdateUnitAsync(value);
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
-        stations = await FuelService.GetStationsAsync();
-        entryModel.Date = DateTime.Today;
-        await LoadEntriesAsync();
-    }
-
-    private async Task SaveEntryAsync()
-    {
         try
         {
-            await FuelService.RecordFuelEntryAsync(entryModel.StationId!.Value, entryModel.Date, entryModel.Quantity, entryModel.Description);
-            successMessage = "Yakıt girişi kaydedildi.";
-            errorMessage = null;
-            entryModel = new FuelEntryModel { Date = DateTime.Today };
-            await LoadEntriesAsync();
+            await using var db = await ContextFactory.CreateDbContextAsync();
+
+            warehouses = await db.Warehouses
+                .Where(w => w.IsActive)
+                .OrderBy(w => w.Code)
+                .ToListAsync();
+
+            products = await db.Products
+                .Where(p => p.IsActive)
+                .OrderBy(p => p.Code)
+                .ToListAsync();
         }
         catch (Exception ex)
         {
-            errorMessage = ex.Message;
-            successMessage = null;
+            error = $"Yükleme hatası: {ex.Message}";
+        }
+        finally { loading = false; }
+    }
+
+    private async Task UpdateUnitAsync(int productId)
+    {
+        try
+        {
+            await using var db = await ContextFactory.CreateDbContextAsync();
+            var p = await db.Products.FirstOrDefaultAsync(x => x.Id == productId);
+            if (p != null)
+            {
+                unitText = p.Unit.ToString(); // ENUM -> string
+            }
+        }
+        catch { }
+        StateHasChanged();
+    }
+
+    private async Task HandleSave()
+    {
+        error = success = null;
+
+        if (model.TargetWarehouseId <= 0) { error = "Depo seçiniz."; return; }
+        if (model.ProductId <= 0) { error = "Ürün seçiniz."; return; }
+        if (model.Quantity <= 0) { error = "Miktar 0'dan büyük olmalı."; return; }
+
+        try
+        {
+            await using var db = await ContextFactory.CreateDbContextAsync();
+
+            var product = await db.Products.FirstAsync(x => x.Id == model.ProductId);
+            unitText = product.Unit.ToString(); // ENUM -> string
+
+            var userId = UserContext.GetUserId();
+
+            var movement = new StockMovement
+            {
+                ProductId = model.ProductId,
+                Quantity = model.Quantity,
+                MovementDate = DateTime.Now,
+                Description = model.Description,
+                DocumentNumber = model.DocumentNumber,
+                SourceWarehouseId = null,
+                TargetWarehouseId = model.TargetWarehouseId,
+                UserId = userId
+            };
+
+            SetMovementUnitFlexible(movement, product);
+
+            db.StockMovements.Add(movement);
+
+            var ws = await db.Set<WarehouseStock>()
+                .FirstOrDefaultAsync(s => s.WarehouseId == model.TargetWarehouseId && s.ProductId == model.ProductId);
+
+            if (ws == null)
+            {
+                ws = new WarehouseStock
+                {
+                    WarehouseId = model.TargetWarehouseId,
+                    ProductId = model.ProductId,
+                    Quantity = 0,
+                    ReservedQuantity = 0,
+                    LastUpdated = DateTime.Now
+                };
+                db.Add(ws);
+            }
+
+            ws.Quantity += model.Quantity;
+            ws.LastUpdated = DateTime.Now;
+
+            await db.SaveChangesAsync();
+            success = "Yakıt girişi kaydedildi.";
+            model = new();
+            unitText = "Litre";
+        }
+        catch (Exception ex)
+        {
+            error = $"Kayıt hatası: {ex.Message}";
         }
     }
 
-    private async Task LoadEntriesAsync()
+    private static void SetMovementUnitFlexible(StockMovement movement, Product product)
     {
-        successMessage = null;
-        errorMessage = null;
-        List<FuelMovementDto> movements = await FuelService.GetMovementsAsync(filterStart, filterEnd, filterStationId);
-        entries = movements
-            .Where(m => m.MovementType == FuelMovementType.Entry)
-            .OrderByDescending(m => m.Date)
-            .ToList();
+        var prop = typeof(StockMovement).GetProperty("Unit");
+        if (prop == null) return;
+
+        var t = prop.PropertyType;
+        if (t == typeof(string))
+            prop.SetValue(movement, product.Unit.ToString());
+        else
+            prop.SetValue(movement, product.Unit); // enum ise
     }
 
-    private class FuelEntryModel
+    private void GoHome() => Nav.NavigateTo("/");
+
+    private class MovementInput
     {
-        [Required(ErrorMessage = "İstasyon seçiniz.")]
-        public int? StationId { get; set; }
-
-        [Required]
-        public DateTime Date { get; set; } = DateTime.Today;
-
-        [Range(1, int.MaxValue, ErrorMessage = "Miktar 1 veya daha büyük olmalıdır.")]
+        public int ProductId { get; set; }
+        public int TargetWarehouseId { get; set; }
         public int Quantity { get; set; }
-
-        [StringLength(500)]
+        public string? DocumentNumber { get; set; }
         public string? Description { get; set; }
     }
 }

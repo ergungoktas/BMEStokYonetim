@@ -3,7 +3,7 @@
 @using BMEStokYonetim.Data
 @using BMEStokYonetim.Data.Entities
 @using BMEStokYonetim.Helpers
-@inject ApplicationDbContext _context
+@inject IDbContextFactory<ApplicationDbContext> ContextFactory
 
 <h3 class="mb-4 fw-bold text-primary">
     <i class="bi bi-speedometer2 me-2"></i> Sistem Durum Paneli
@@ -19,7 +19,6 @@
 else
 {
     <div class="row g-4 mb-4">
-
         @foreach (var card in SummaryCards)
         {
             <div class="col-12 col-sm-6 col-lg-3">
@@ -93,10 +92,11 @@ else
         transition: transform 0.15s ease, box-shadow 0.2s ease;
         border-radius: 0.75rem;
     }
-    .dashboard-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
+
+        .dashboard-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
 </style>
 
 @code {
@@ -118,13 +118,15 @@ else
     {
         isLoading = true;
 
+        await using var _context = await ContextFactory.CreateDbContextAsync();
+
         // Talep verileri
         pendingRequests = await _context.RequestItems.CountAsync(r => r.Status == TalepDurumu.Open);
         approvedRequests = await _context.RequestItems.CountAsync(r => r.Status == TalepDurumu.Approved);
         activePurchases = await _context.PurchaseDetails.CountAsync(p => p.Status == TalepDurumu.PurchaseApproved);
         lowStockCount = await _context.Products.CountAsync(p => p.MinStock.HasValue && p.CurrentStock <= p.MinStock.Value);
 
-        // Rezervasyonlar
+        // Rezervasyon verileri
         activeReservations = await _context.StockReservations.CountAsync(r => r.Status == RezervasyonDurumu.ReservationActive);
         expiredReservations = await _context.StockReservations.CountAsync(r => r.Status == RezervasyonDurumu.ReservationExpired);
         cancelledReservations = await _context.StockReservations.CountAsync(r => r.Status == RezervasyonDurumu.ReservationCancelled);

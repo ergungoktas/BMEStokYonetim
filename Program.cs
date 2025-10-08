@@ -3,9 +3,9 @@ using BMEStokYonetim.Data.Entities;
 using BMEStokYonetim.Services.BackgroundJobs;
 using BMEStokYonetim.Services.Iservice;
 using BMEStokYonetim.Services.Service;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Quartz;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -28,6 +28,15 @@ builder.Services.AddDbContextFactory<ApplicationDbContext>(
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 builder.Services.AddHttpContextAccessor();
 
+// ✅ Data Protection (kalıcı anahtar deposu)
+string keyPath = Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+    "BMEStokYonetim_Keys");
+
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(keyPath))
+    .SetApplicationName("BMEStokYonetim");
+
 // ✅ Servis kayıtları
 builder.Services.AddScoped<IStockReportService, StockReportService>();
 builder.Services.AddScoped<IUserContextService, UserContextService>();
@@ -41,13 +50,18 @@ builder.Services.AddScoped<IRequestService, RequestService>();
 builder.Services.AddScoped<IPurchaseService, PurchaseService>();
 builder.Services.AddScoped<IFuelService, FuelService>();
 
+// ✅ Razor ve Blazor ayarları
+builder.Services.AddRazorPages();
+builder.Services.AddServerSideBlazor()
+    .AddCircuitOptions(options => { options.DetailedErrors = true; });
+
 // ✅ Logging ayarları
 builder.Services.AddLogging(logging =>
 {
-    logging.ClearProviders();
-    logging.AddConsole();
-    logging.AddDebug();
-    logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
+    _ = logging.ClearProviders();
+    _ = logging.AddConsole();
+    _ = logging.AddDebug();
+    _ = logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
 });
 
 // ✅ Identity ayarları
@@ -63,18 +77,25 @@ builder.Services.AddDefaultIdentity<ApplicationUser>(options =>
 .AddRoles<IdentityRole>()
 .AddEntityFrameworkStores<ApplicationDbContext>();
 
-builder.Services.AddRazorPages();
-builder.Services.AddServerSideBlazor();
+// ✅ Cookie yönlendirme hatası engelleme
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.Events.OnRedirectToLogin = context =>
+    {
+        context.Response.Redirect("/Identity/Account/Login");
+        return Task.CompletedTask;
+    };
+});
 
 // ✅ Quartz job (stok rezervasyon yenileme)
 builder.Services.AddQuartz(q =>
 {
     JobKey jobKey = new("ReservationJob");
-    q.AddJob<ReservationJob>(opts => opts.WithIdentity(jobKey));
-    q.AddTrigger(opts => opts
+    _ = q.AddJob<ReservationJob>(opts => opts.WithIdentity(jobKey));
+    _ = q.AddTrigger(opts => opts
         .ForJob(jobKey)
         .WithIdentity("ReservationJob-trigger")
-        .WithCronSchedule("0 5 0 * * ?"));
+        .WithCronSchedule("0 5 0 * * ?")); // Her gün 00:05'te
 });
 builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 
@@ -94,9 +115,6 @@ if (app.Environment.IsDevelopment())
         await db.Database.MigrateAsync();
         logger.LogInformation("✅ Database migration completed successfully.");
         logger.LogInformation("🔗 Connected DB: {Database}", db.Database.GetDbConnection().Database);
-
-        // ✅ Seed işlemi
-        await DbSeeder.SeedAsync(scope.ServiceProvider, logger);
     }
     catch (Exception ex)
     {
@@ -105,8 +123,8 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
-    app.UseExceptionHandler("/Error");
-    app.UseHsts();
+    _ = app.UseExceptionHandler("/Error");
+    _ = app.UseHsts();
 }
 
 // ✅ Uygulama yapılandırması

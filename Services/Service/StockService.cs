@@ -253,5 +253,101 @@ namespace BMEStokYonetim.Services.Service
 
             _ = await _context.SaveChangesAsync();
         }
+
+        // =====================================================================
+        //                      YAKIT: FuelInAsync / FuelOutAsync
+        // =====================================================================
+
+        // Depoya yakıt girişi
+        public async Task<int> FuelInAsync(int productId, int warehouseId, int quantity, string unit, string? documentNo, string? description, string userId)
+        {
+            if (quantity <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(quantity), "Miktar 0'dan büyük olmalı.");
+            }
+
+            Product? product = await _context.Products.FindAsync(productId);
+            if (product == null)
+            {
+                throw new InvalidOperationException("Ürün bulunamadı.");
+            }
+
+            ProductUnit resolvedUnit = TryParseUnit(unit, product.Unit);
+
+            StockMovement movement = new()
+            {
+                ProductId = productId,
+                MovementType = MovementType.In,
+                Quantity = quantity,
+                Unit = resolvedUnit,
+                MovementDate = DateTime.UtcNow,
+                Description = description,
+                DocumentNumber = documentNo,
+                TargetWarehouseId = warehouseId,
+                UserId = userId
+            };
+
+            _ = _context.StockMovements.Add(movement);
+
+            await _warehouseService.UpdateStockLevelAsync(warehouseId, productId, quantity);
+            product.CurrentStock += quantity;
+
+            return await _context.SaveChangesAsync();
+        }
+
+        // Depodan yakıt çıkışı
+        public async Task<int> FuelOutAsync(int productId, int warehouseId, int quantity, string unit, string? documentNo, string? description, string userId, int? assetId, int? km, int? hourMeter)
+        {
+            if (quantity <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(quantity), "Miktar 0'dan büyük olmalı.");
+            }
+
+            Product? product = await _context.Products.FindAsync(productId);
+            if (product == null)
+            {
+                throw new InvalidOperationException("Ürün bulunamadı.");
+            }
+
+            WarehouseStock? ws = await _warehouseService.GetStockAsync(warehouseId, productId);
+            if (ws == null || ws.AvailableQuantity < quantity)
+            {
+                throw new InvalidOperationException("Seçilen depoda yeterli stok bulunmuyor.");
+            }
+
+            ProductUnit resolvedUnit = TryParseUnit(unit, product.Unit);
+
+            StockMovement movement = new()
+            {
+                ProductId = productId,
+                MovementType = MovementType.Out,
+                Quantity = quantity,
+                Unit = resolvedUnit,
+                MovementDate = DateTime.UtcNow,
+                Description = description,
+                DocumentNumber = documentNo,
+                SourceWarehouseId = warehouseId,
+                UserId = userId,
+                AssetId = assetId,
+                Km = km,
+                HourMeter = hourMeter
+            };
+
+            _ = _context.StockMovements.Add(movement);
+
+            await _warehouseService.UpdateStockLevelAsync(warehouseId, productId, -quantity);
+            product.CurrentStock = Math.Max(0, product.CurrentStock - quantity);
+
+            return await _context.SaveChangesAsync();
+        }
+
+        // Birim metnini ProductUnit enum'una çevir; olmazsa varsayılanı kullan
+        private static ProductUnit TryParseUnit(string unit, ProductUnit fallback)
+        {
+            return !string.IsNullOrWhiteSpace(unit) &&
+                Enum.TryParse<ProductUnit>(unit, ignoreCase: true, out ProductUnit parsed)
+                ? parsed
+                : fallback;
+        }
     }
 }

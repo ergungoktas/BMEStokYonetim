@@ -23,6 +23,8 @@
 
         // 🔹 Rezervasyon iptali (sadece manuel iptal edilebilir)
         Task CancelReservationAsync(int reservationId, string userId);
+        Task<int> FuelInAsync(int productId, int warehouseId, int quantity, string unit, string? documentNo, string? description, string userId);
+        Task<int> FuelOutAsync(int productId, int warehouseId, int quantity, string unit, string? documentNo, string? description, string userId, int? assetId, int? km, int? hourMeter);
     }
 
     // 🔸 Yardımcı sınıf
@@ -33,14 +35,7 @@
                                                        TalepDurumu statusPartial,
                                                        TalepDurumu statusClosed)
         {
-            if (totalEntered <= 0)
-            {
-                return statusApproved;
-            }
-            else
-            {
-                return totalEntered < orderedQty ? statusPartial : statusClosed;
-            }
+            return totalEntered <= 0 ? statusApproved : totalEntered < orderedQty ? statusPartial : statusClosed;
         }
     }
 }

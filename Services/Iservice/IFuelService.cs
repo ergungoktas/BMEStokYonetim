@@ -5,8 +5,10 @@ namespace BMEStokYonetim.Services.Iservice
 {
     public interface IFuelService
     {
-        Task<List<AkaryakitIstasyon>> GetStationsAsync(CancellationToken cancellationToken = default);
-        Task<AkaryakitIstasyon> SaveStationAsync(AkaryakitIstasyon station, CancellationToken cancellationToken = default);
+        Task<List<Warehouse>> GetStationsAsync();                 // İstasyon = Depo
+        Task<Warehouse?> GetStationAsync(int id);
+        Task<Warehouse> CreateOrUpdateStationAsync(Warehouse w);
+        Task DeleteStationAsync(int id);
 
         Task RecordFuelEntryAsync(int stationId, DateTime date, int quantityLitre, string? description,
                                   CancellationToken cancellationToken = default);
