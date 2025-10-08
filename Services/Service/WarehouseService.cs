@@ -52,6 +52,8 @@ namespace BMEStokYonetim.Services.Service
 
             if (stock == null)
             {
+                if (quantity < 0)
+                { throw new InvalidOperationException("Yetersiz stok"); }
                 stock = new WarehouseStock
                 {
                     WarehouseId = warehouseId,
@@ -64,6 +66,8 @@ namespace BMEStokYonetim.Services.Service
             else
             {
                 stock.Quantity += quantity;
+                if (stock.Quantity < 0)
+                { throw new InvalidOperationException("Yetersiz stok"); }
                 stock.LastUpdated = DateTime.UtcNow;
             }
 
