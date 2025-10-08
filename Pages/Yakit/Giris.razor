@@ -1,2 +1,192 @@
 ﻿@page "/yakit/giris"
-<h4>Yakıt Girişleri</h4>
+@using System.ComponentModel.DataAnnotations
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Models
+@using BMEStokYonetim.Services.Iservice
+@using Microsoft.AspNetCore.Components.Forms
+@inject IFuelService FuelService
+
+<PageTitle>Yakıt Girişleri</PageTitle>
+
+<h3 class="mb-3">Yakıt Girişleri</h3>
+
+<div class="row g-3">
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">Yeni Yakıt Girişi</div>
+            <div class="card-body">
+                @if (!string.IsNullOrWhiteSpace(successMessage))
+                {
+                    <div class="alert alert-success">@successMessage</div>
+                }
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="alert alert-danger">@errorMessage</div>
+                }
+
+                <EditForm Model="entryModel" OnValidSubmit="SaveEntryAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="mb-3">
+                        <label class="form-label">İstasyon</label>
+                        <InputSelect class="form-select" @bind-Value="entryModel.StationId">
+                            <option value="">Seçiniz</option>
+                            @foreach (AkaryakitIstasyon station in stations)
+                            {
+                                <option value="@station.IstasyonID">@station.Ad (@station.Tip)</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="() => entryModel.StationId" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Tarih</label>
+                        <InputDate class="form-control" @bind-Value="entryModel.Date" />
+                        <ValidationMessage For="() => entryModel.Date" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Miktar (Litre)</label>
+                        <InputNumber class="form-control" @bind-Value="entryModel.Quantity" min="1" />
+                        <ValidationMessage For="() => entryModel.Quantity" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Açıklama</label>
+                        <InputTextArea class="form-control" rows="3" @bind-Value="entryModel.Description" />
+                    </div>
+
+                    <button class="btn btn-primary" type="submit">Kaydet</button>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label">Başlangıç Tarihi</label>
+                        <InputDate class="form-control" @bind-Value="filterStart" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Bitiş Tarihi</label>
+                        <InputDate class="form-control" @bind-Value="filterEnd" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">İstasyon</label>
+                        <InputSelect class="form-select" @bind-Value="filterStationId">
+                            <option value="">Tümü</option>
+                            @foreach (AkaryakitIstasyon station in stations)
+                            {
+                                <option value="@station.IstasyonID">@station.Ad</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="col-12 d-grid">
+                        <button class="btn btn-outline-primary" @onclick="LoadEntriesAsync">Filtrele</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Kayıtlı Girişler</div>
+            <div class="table-responsive">
+                <table class="table table-striped mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tarih</th>
+                            <th>İstasyon</th>
+                            <th>Miktar (L)</th>
+                            <th>Açıklama</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!entries.Any())
+                        {
+                            <tr>
+                                <td colspan="4" class="text-center">Kayıt bulunamadı.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (FuelMovementDto entry in entries)
+                            {
+                                <tr>
+                                    <td>@entry.Date.ToString("g")</td>
+                                    <td>@entry.StationName</td>
+                                    <td>@entry.QuantityLitre</td>
+                                    <td>@entry.Description</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<AkaryakitIstasyon> stations = new();
+    private List<FuelMovementDto> entries = new();
+    private FuelEntryModel entryModel = new();
+    private string? successMessage;
+    private string? errorMessage;
+
+    private DateTime? filterStart = DateTime.Today.AddDays(-30);
+    private DateTime? filterEnd = DateTime.Today;
+    private int? filterStationId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        stations = await FuelService.GetStationsAsync();
+        entryModel.Date = DateTime.Today;
+        await LoadEntriesAsync();
+    }
+
+    private async Task SaveEntryAsync()
+    {
+        try
+        {
+            await FuelService.RecordFuelEntryAsync(entryModel.StationId!.Value, entryModel.Date, entryModel.Quantity, entryModel.Description);
+            successMessage = "Yakıt girişi kaydedildi.";
+            errorMessage = null;
+            entryModel = new FuelEntryModel { Date = DateTime.Today };
+            await LoadEntriesAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+            successMessage = null;
+        }
+    }
+
+    private async Task LoadEntriesAsync()
+    {
+        successMessage = null;
+        errorMessage = null;
+        List<FuelMovementDto> movements = await FuelService.GetMovementsAsync(filterStart, filterEnd, filterStationId);
+        entries = movements
+            .Where(m => m.MovementType == FuelMovementType.Entry)
+            .OrderByDescending(m => m.Date)
+            .ToList();
+    }
+
+    private class FuelEntryModel
+    {
+        [Required(ErrorMessage = "İstasyon seçiniz.")]
+        public int? StationId { get; set; }
+
+        [Required]
+        public DateTime Date { get; set; } = DateTime.Today;
+
+        [Range(1, int.MaxValue, ErrorMessage = "Miktar 1 veya daha büyük olmalıdır.")]
+        public int Quantity { get; set; }
+
+        [StringLength(500)]
+        public string? Description { get; set; }
+    }
+}

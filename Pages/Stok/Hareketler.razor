@@ -1,31 +1,66 @@
 ﻿@page "/stok/hareketler"
 @using BMEStokYonetim.Data
 @using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Helpers
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
 @inject ApplicationDbContext _context
 
-<h3>Stok Hareketleri</h3>
+<PageTitle>Stok Hareketleri</PageTitle>
 
-<div class="mb-3">
-    <div class="row g-2">
-        <div class="col-md-3">
-            <label class="form-label">Başlangıç</label>
-            <InputDate class="form-control" @bind-Value="filterStart" />
-        </div>
-        <div class="col-md-3">
-            <label class="form-label">Bitiş</label>
-            <InputDate class="form-control" @bind-Value="filterEnd" />
-        </div>
-        <div class="col-md-3">
-            <label class="form-label">Tür</label>
-            <InputSelect class="form-select" @bind-Value="filterMovementType">
-                <option value="">Tümü</option>
-                <option value="@MovementType.In">Giriş</option>
-                <option value="@MovementType.Out">Çıkış</option>
-                <option value="@MovementType.Transfer">Transfer</option>
-            </InputSelect>
-        </div>
-        <div class="col-md-3 d-grid">
-            <button class="btn btn-primary" @onclick="FilterAsync">Filtrele</button>
+<h3 class="mb-3">Stok Hareketleri</h3>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Başlangıç Tarihi</label>
+                <InputDate class="form-control" @bind-Value="filterStart" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Bitiş Tarihi</label>
+                <InputDate class="form-control" @bind-Value="filterEnd" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Hareket Türü</label>
+                <InputSelect class="form-select" @bind-Value="filterMovementType">
+                    <option value="">Tümü</option>
+                    <option value="@MovementType.In">Stok Girişi</option>
+                    <option value="@MovementType.Out">Stok Çıkışı</option>
+                    <option value="@MovementType.Transfer">Transfer</option>
+                </InputSelect>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Ürün</label>
+                <InputSelect class="form-select" @bind-Value="filterProductId">
+                    <option value="">Tümü</option>
+                    @foreach (var product in products)
+                    {
+                        <option value="@product.Id">@product.Code - @product.Name</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Depo</label>
+                <InputSelect class="form-select" @bind-Value="filterWarehouseId">
+                    <option value="">Tümü</option>
+                    @foreach (var warehouse in warehouses)
+                    {
+                        <option value="@warehouse.Id">@warehouse.Name</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Evrak No</label>
+                <InputText class="form-control" @bind-Value="filterDocumentNumber" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Açıklama</label>
+                <InputText class="form-control" @bind-Value="filterDescription" />
+            </div>
+            <div class="col-md-3 d-grid">
+                <button class="btn btn-primary" @onclick="FilterAsync">Filtrele</button>
+            </div>
         </div>
     </div>
 </div>
@@ -36,52 +71,119 @@
 }
 else
 {
-    <table class="table table-bordered table-sm">
-        <thead class="table-light">
-            <tr>
-                <th>Tarih</th>
-                <th>Tür</th>
-                <th>Ürün</th>
-                <th>Miktar</th>
-                <th>Depo</th>
-                <th>Açıklama</th>
-            </tr>
-        </thead>
-        <tbody>
-            @if (!movements.Any())
-            {
-                <tr><td colspan="6" class="text-center">Kayıt bulunamadı.</td></tr>
-            }
-            else
-            {
-                @foreach (var m in movements)
+    <div class="row g-3 mb-3">
+        <div class="col-md-4">
+            <div class="card border-success h-100">
+                <div class="card-body">
+                    <h6 class="card-title text-success">Toplam Giriş</h6>
+                    <p class="display-6">@movementSummary.TotalIn</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-danger h-100">
+                <div class="card-body">
+                    <h6 class="card-title text-danger">Toplam Çıkış</h6>
+                    <p class="display-6">@movementSummary.TotalOut</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-info h-100">
+                <div class="card-body">
+                    <h6 class="card-title text-info">Toplam Transfer</h6>
+                    <p class="display-6">@movementSummary.TotalTransfer</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead class="table-light">
+                <tr>
+                    <th>Tarih</th>
+                    <th>Tür</th>
+                    <th>Ürün</th>
+                    <th>Miktar</th>
+                    <th>Kaynak Depo</th>
+                    <th>Hedef Depo</th>
+                    <th>Evrak</th>
+                    <th>Kullanıcı</th>
+                    <th>Açıklama</th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (!movements.Any())
                 {
                     <tr>
-                        <td>@m.MovementDate.ToString("dd.MM.yyyy")</td>
-                        <td>@m.MovementType</td>
-                        <td>@m.Product?.Name</td>
-                        <td>@m.Quantity @m.Unit</td>
-                        <td>@m.TargetWarehouse?.Name</td>
-                        <td>@m.Description</td>
+                        <td colspan="9" class="text-center">Kriterlere uygun hareket bulunamadı.</td>
                     </tr>
                 }
-            }
-        </tbody>
-    </table>
+                else
+                {
+                    @foreach (var movement in movements)
+                    {
+                        var rowClass = movement.MovementType switch
+                        {
+                            MovementType.In => "table-success",
+                            MovementType.Out => "table-danger",
+                            MovementType.Transfer => "table-warning",
+                            _ => string.Empty
+                        };
+
+                        <tr class="@rowClass">
+                            <td>@movement.MovementDate.ToString("g")</td>
+                            <td>@movement.MovementType.GetDescription()</td>
+                            <td>@movement.Product?.Name</td>
+                            <td>@movement.Quantity @movement.Unit.GetDescription()</td>
+                            <td>@movement.SourceWarehouse?.Name</td>
+                            <td>@movement.TargetWarehouse?.Name</td>
+                            <td>@movement.DocumentNumber</td>
+                            <td>@movement.User?.UserName</td>
+                            <td>@movement.Description</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
 }
 
 @code {
+    private List<Product> products = new();
+    private List<Warehouse> warehouses = new();
     private List<StockMovement> movements = new();
+
+    private MovementSummary movementSummary = new();
     private bool isLoading = true;
 
     private DateTime? filterStart = DateTime.Today.AddDays(-30);
     private DateTime? filterEnd = DateTime.Today;
     private MovementType? filterMovementType;
+    private int? filterProductId;
+    private int? filterWarehouseId;
+    private string? filterDocumentNumber;
+    private string? filterDescription;
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadLookupsAsync();
         await LoadMovementsAsync();
         isLoading = false;
+    }
+
+    private async Task LoadLookupsAsync()
+    {
+        products = await _context.Products
+            .AsNoTracking()
+            .OrderBy(p => p.Name)
+            .ToListAsync();
+
+        warehouses = await _context.Warehouses
+            .AsNoTracking()
+            .OrderBy(w => w.Name)
+            .ToListAsync();
     }
 
     private async Task FilterAsync()
@@ -93,23 +195,55 @@ else
 
     private async Task LoadMovementsAsync()
     {
-        IQueryable<StockMovement> query = _context.StockMovements
+        var query = _context.StockMovements
+            .AsNoTracking()
             .Include(sm => sm.Product)
+            .Include(sm => sm.SourceWarehouse)
             .Include(sm => sm.TargetWarehouse)
-            .AsNoTracking();
+            .Include(sm => sm.User)
+            .AsQueryable();
 
         if (filterStart.HasValue)
-            query = query.Where(sm => sm.MovementDate >= filterStart.Value);
+            query = query.Where(sm => sm.MovementDate >= filterStart.Value.Date);
 
         if (filterEnd.HasValue)
-            query = query.Where(sm => sm.MovementDate <= filterEnd.Value);
+        {
+            var endInclusive = filterEnd.Value.Date.AddDays(1).AddTicks(-1);
+            query = query.Where(sm => sm.MovementDate <= endInclusive);
+        }
 
         if (filterMovementType.HasValue)
             query = query.Where(sm => sm.MovementType == filterMovementType.Value);
 
+        if (filterProductId.HasValue)
+            query = query.Where(sm => sm.ProductId == filterProductId.Value);
+
+        if (filterWarehouseId.HasValue)
+            query = query.Where(sm => sm.SourceWarehouseId == filterWarehouseId.Value || sm.TargetWarehouseId == filterWarehouseId.Value);
+
+        if (!string.IsNullOrWhiteSpace(filterDocumentNumber))
+            query = query.Where(sm => sm.DocumentNumber != null && sm.DocumentNumber.Contains(filterDocumentNumber));
+
+        if (!string.IsNullOrWhiteSpace(filterDescription))
+            query = query.Where(sm => sm.Description != null && sm.Description.Contains(filterDescription));
+
         movements = await query
             .OrderByDescending(sm => sm.MovementDate)
-            .Take(200)
+            .ThenByDescending(sm => sm.Id)
             .ToListAsync();
+
+        movementSummary = new MovementSummary
+        {
+            TotalIn = movements.Where(m => m.MovementType == MovementType.In).Sum(m => m.Quantity),
+            TotalOut = movements.Where(m => m.MovementType == MovementType.Out).Sum(m => m.Quantity),
+            TotalTransfer = movements.Where(m => m.MovementType == MovementType.Transfer).Sum(m => m.Quantity)
+        };
+    }
+
+    private class MovementSummary
+    {
+        public int TotalIn { get; set; }
+        public int TotalOut { get; set; }
+        public int TotalTransfer { get; set; }
     }
 }
