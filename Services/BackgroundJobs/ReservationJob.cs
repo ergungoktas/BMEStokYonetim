@@ -1,4 +1,5 @@
-using BMEStokYonetim.Services.Iservice;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Quartz;
 
 namespace BMEStokYonetim.Services.BackgroundJobs
