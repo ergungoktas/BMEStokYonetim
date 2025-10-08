@@ -52,6 +52,11 @@ namespace BMEStokYonetim.Services.Service
             _ = _context.StockMovements.Add(movement);
             await _warehouseService.UpdateStockLevelAsync(warehouseId, purchaseDetail.ProductId, quantity);
 
+            if (purchaseDetail.Product != null)
+            {
+                purchaseDetail.Product.CurrentStock += quantity;
+            }
+
             int totalReceived = await _context.StockMovements
                 .Where(s => s.PurchaseDetailId == purchaseDetail.Id && s.MovementType == MovementType.In)
                 .SumAsync(s => s.Quantity);
@@ -114,6 +119,10 @@ namespace BMEStokYonetim.Services.Service
 
             _ = _context.StockMovements.Add(movement);
             await _warehouseService.UpdateStockLevelAsync(mainWarehouse.Id, productId, quantity);
+            if (product != null)
+            {
+                product.CurrentStock += quantity;
+            }
             _ = await _context.SaveChangesAsync();
         }
 
@@ -125,6 +134,12 @@ namespace BMEStokYonetim.Services.Service
         {
             Product? product = await _context.Products.FindAsync(productId);
             ProductUnit unit = product?.Unit ?? ProductUnit.Adet;
+
+            WarehouseStock? sourceStock = await _warehouseService.GetStockAsync(sourceWarehouseId, productId);
+            if (sourceStock == null || sourceStock.AvailableQuantity < quantity)
+            {
+                throw new InvalidOperationException("Seçilen depoda yeterli stok bulunmuyor.");
+            }
 
             StockMovement movement = new()
             {
@@ -146,6 +161,11 @@ namespace BMEStokYonetim.Services.Service
             _ = _context.StockMovements.Add(movement);
             await _warehouseService.UpdateStockLevelAsync(sourceWarehouseId, productId, -quantity);
 
+            if (product != null)
+            {
+                product.CurrentStock = Math.Max(0, product.CurrentStock - quantity);
+            }
+
             if (requestItemId.HasValue)
             {
                 RequestItem? requestItem = await _context.RequestItems.FindAsync(requestItemId.Value);
@@ -166,6 +186,12 @@ namespace BMEStokYonetim.Services.Service
         {
             Product? product = await _context.Products.FindAsync(productId);
             ProductUnit unit = product?.Unit ?? ProductUnit.Adet;
+
+            WarehouseStock? sourceStock = await _warehouseService.GetStockAsync(fromWarehouseId, productId);
+            if (sourceStock == null || sourceStock.AvailableQuantity < quantity)
+            {
+                throw new InvalidOperationException("Kaynak depoda yeterli stok bulunmuyor.");
+            }
 
             StockMovement movement = new()
             {

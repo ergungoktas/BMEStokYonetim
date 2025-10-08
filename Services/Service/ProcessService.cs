@@ -1,3 +1,4 @@
+using System;
 using BMEStokYonetim.Data;
 using BMEStokYonetim.Data.Entities;
 using BMEStokYonetim.Services.Iservice;
@@ -75,23 +76,8 @@ namespace BMEStokYonetim.Services.Service
             await using ApplicationDbContext context = await _contextFactory.CreateDbContextAsync();
             string resolvedUserId = ResolveUserId(userId);
 
-<<<<<<< ours
             AddProcessHistory(context, entityType, entityId, status, stage, resolvedUserId);
             await context.SaveChangesAsync();
-=======
-            ProcessHistory history = new()
-            {
-                EntityType = entityType,
-                EntityId = entityId,
-                Status = status,
-                ApprovalStage = stage,
-                UserId = userId,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _ = context.ProcessHistories.Add(history);
-            _ = await context.SaveChangesAsync();
->>>>>>> theirs
         }
 
         public async Task<List<ProcessHistory>> GetProcessHistoryAsync(string entityType, int entityId)
@@ -176,7 +162,7 @@ namespace BMEStokYonetim.Services.Service
                 Status = status,
                 ApprovalStage = stage,
                 UserId = userId,
-                CreatedAt = DateTime.Now
+                CreatedAt = DateTime.UtcNow
             };
 
             context.ProcessHistories.Add(history);
