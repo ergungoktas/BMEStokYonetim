@@ -16,6 +16,11 @@
         public int QuantityLitre { get; set; }
         public string? Description { get; set; }
 
+        public string? TargetType { get; set; }
+        public int? TargetId { get; set; }
+        public int? Km { get; set; }
+        public int? HourMeter { get; set; }
+
         // Ek örnek alanlar (opsiyonel)
         public int TotalEntries { get; set; }
         public int TotalExits { get; set; }
