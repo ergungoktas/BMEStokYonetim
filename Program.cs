@@ -5,6 +5,7 @@ using BMEStokYonetim.Services.Iservice;
 using BMEStokYonetim.Services.Service;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Quartz;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -17,11 +18,12 @@ if (string.IsNullOrWhiteSpace(connectionString))
 }
 
 // ✅ DbContext ve Factory kaydı
-Action<DbContextOptionsBuilder> dbContextOptions = options =>
-    options.UseSqlServer(connectionString);
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlServer(connectionString));
 
-builder.Services.AddDbContext<ApplicationDbContext>(dbContextOptions);
-builder.Services.AddDbContextFactory<ApplicationDbContext>(dbContextOptions);
+builder.Services.AddDbContextFactory<ApplicationDbContext>(
+    options => options.UseSqlServer(connectionString),
+    ServiceLifetime.Scoped);
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 builder.Services.AddHttpContextAccessor();
