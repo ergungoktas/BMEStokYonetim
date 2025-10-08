@@ -43,7 +43,7 @@ else
                              ValueChanged="OnProductChanged"
                              ValueExpression="() => model.ProductId">
                     <option value="">Ürün seçiniz</option>
-                    @foreach (Product product in products)
+                    @foreach (var product in products)
                     {
                         <option value="@product.Id">@product.Code - @product.Name (@product.Unit.GetDescription())</option>
                     }
@@ -60,7 +60,7 @@ else
                              ValueExpression="() => model.FromWarehouseId"
                              disabled="@(availableStocks.Count == 0)">
                     <option value="">Depo seçiniz</option>
-                    @foreach (Warehouse warehouse in warehouses)
+                    @foreach (var warehouse in warehouses)
                     {
                         <option value="@warehouse.Id">@warehouse.Name</option>
                     }
@@ -81,7 +81,7 @@ else
                              ValueChanged="OnToWarehouseChanged"
                              ValueExpression="() => model.ToWarehouseId">
                     <option value="">Depo seçiniz</option>
-                    @foreach (Warehouse warehouse in warehouses)
+                    @foreach (var warehouse in warehouses)
                     {
                         <option value="@warehouse.Id" disabled="@(warehouse.Id == model.FromWarehouseId)">@warehouse.Name</option>
                     }
@@ -117,7 +117,7 @@ else
         </div>
     </EditForm>
 
-    if (model.ProductId.HasValue)
+    @if (model.ProductId.HasValue)
     {
         <div class="card mt-4">
             <div class="card-header">Seçili Ürün Depo Durumu</div>
@@ -139,7 +139,7 @@ else
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (WarehouseStock stock in availableStocks)
+                                @foreach (var stock in availableStocks)
                                 {
                                     <tr class="@(stock.AvailableQuantity == 0 ? "table-warning" : string.Empty)">
                                         <td>@stock.Warehouse.Name</td>
@@ -158,9 +158,9 @@ else
 }
 
 @code {
-    private readonly List<Product> products = new();
-    private readonly List<Warehouse> warehouses = new();
-    private readonly List<WarehouseStock> availableStocks = new();
+    private List<Product> products = new();
+    private List<Warehouse> warehouses = new();
+    private List<WarehouseStock> availableStocks = new();
 
     private TransferModel model = new();
     private EditContext? editContext;
@@ -179,27 +179,21 @@ else
 
     private async Task LoadLookupsAsync()
     {
-        List<Product> productList = await _context.Products
+        products = await _context.Products
             .AsNoTracking()
             .OrderBy(p => p.Name)
             .ToListAsync();
 
-        List<Warehouse> warehouseList = await _context.Warehouses
+        warehouses = await _context.Warehouses
             .AsNoTracking()
             .OrderBy(w => w.Name)
             .ToListAsync();
-
-        products.Clear();
-        products.AddRange(productList);
-
-        warehouses.Clear();
-        warehouses.AddRange(warehouseList);
     }
 
     private async Task OnProductChanged(int? productId)
     {
         model.ProductId = productId;
-        Product? product = products.FirstOrDefault(p => p.Id == productId);
+        var product = products.FirstOrDefault(p => p.Id == productId);
         model.Unit = product?.Unit ?? ProductUnit.None;
 
         await LoadStocksForProductAsync();
@@ -227,7 +221,7 @@ else
 
         if (model.ProductId.HasValue)
         {
-            List<WarehouseStock> stocks = await _context.WarehouseStocks
+            var stocks = await _context.WarehouseStocks
                 .AsNoTracking()
                 .Include(ws => ws.Warehouse)
                 .Where(ws => ws.ProductId == model.ProductId.Value)
@@ -255,8 +249,7 @@ else
             return;
         }
 
-        WarehouseStock? stock = availableStocks
-            .FirstOrDefault(ws => ws.WarehouseId == model.FromWarehouseId.Value);
+        var stock = availableStocks.FirstOrDefault(ws => ws.WarehouseId == model.FromWarehouseId.Value);
 
         if (stock == null || stock.AvailableQuantity < model.Quantity)
         {
@@ -268,11 +261,9 @@ else
 
         try
         {
-            string? userId = await UserContext.GetCurrentUserIdAsync();
+            var userId = await UserContext.GetCurrentUserIdAsync();
             if (string.IsNullOrEmpty(userId))
-            {
                 throw new InvalidOperationException("Kullanıcı bilgisi alınamadı.");
-            }
 
             await StockService.TransferAsync(
                 model.ProductId.Value,
@@ -322,7 +313,7 @@ else
 
     private int? GetAvailableForWarehouse(int warehouseId)
     {
-        WarehouseStock? stock = availableStocks.FirstOrDefault(ws => ws.WarehouseId == warehouseId);
+        var stock = availableStocks.FirstOrDefault(ws => ws.WarehouseId == warehouseId);
         return stock?.AvailableQuantity;
     }
 
