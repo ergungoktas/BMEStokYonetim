@@ -9,30 +9,24 @@ using Quartz;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
-<<<<<<< ours
+// ✅ Güvenli bağlantı kontrolü
 string? connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
     throw new InvalidOperationException("DefaultConnection bağlantı dizesi yapılandırılmamış.");
 }
 
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
-
-builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
-=======
-// ✅ 1. DbContext & Factory kaydı (tek ve güvenli yapı)
+// ✅ DbContext ve Factory kaydı
 Action<DbContextOptionsBuilder> dbContextOptions = options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
+    options.UseSqlServer(connectionString);
 
 builder.Services.AddDbContext<ApplicationDbContext>(dbContextOptions);
 builder.Services.AddDbContextFactory<ApplicationDbContext>(dbContextOptions);
->>>>>>> theirs
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 builder.Services.AddHttpContextAccessor();
 
+// ✅ Servis kayıtları
 builder.Services.AddScoped<IStockReportService, StockReportService>();
 builder.Services.AddScoped<IUserContextService, UserContextService>();
 builder.Services.AddScoped<IAssetService, AssetService>();
@@ -43,7 +37,9 @@ builder.Services.AddScoped<IWarehouseService, WarehouseService>();
 builder.Services.AddScoped<IMaintenanceService, MaintenanceService>();
 builder.Services.AddScoped<IRequestService, RequestService>();
 builder.Services.AddScoped<IPurchaseService, PurchaseService>();
+builder.Services.AddScoped<IFuelService, FuelService>();
 
+// ✅ Logging ayarları
 builder.Services.AddLogging(logging =>
 {
     logging.ClearProviders();
@@ -52,6 +48,7 @@ builder.Services.AddLogging(logging =>
     logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
 });
 
+// ✅ Identity ayarları
 builder.Services.AddDefaultIdentity<ApplicationUser>(options =>
 {
     options.SignIn.RequireConfirmedAccount = false;
@@ -67,6 +64,7 @@ builder.Services.AddDefaultIdentity<ApplicationUser>(options =>
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 
+// ✅ Quartz job (stok rezervasyon yenileme)
 builder.Services.AddQuartz(q =>
 {
     JobKey jobKey = new("ReservationJob");
@@ -76,31 +74,32 @@ builder.Services.AddQuartz(q =>
         .WithIdentity("ReservationJob-trigger")
         .WithCronSchedule("0 5 0 * * ?"));
 });
-
 builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 
 WebApplication app = builder.Build();
 
+// ✅ Database migration & seeding
 if (app.Environment.IsDevelopment())
 {
-<<<<<<< ours
-    app.UseMigrationsEndPoint();
-=======
+    using IServiceScope scope = app.Services.CreateScope();
     IDbContextFactory<ApplicationDbContext> factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
-    await using ApplicationDbContext db = await factory.CreateDbContextAsync();
     ILogger<Program> logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+    await using ApplicationDbContext db = await factory.CreateDbContextAsync();
 
     try
     {
         await db.Database.MigrateAsync();
         logger.LogInformation("✅ Database migration completed successfully.");
         logger.LogInformation("🔗 Connected DB: {Database}", db.Database.GetDbConnection().Database);
+
+        // ✅ Seed işlemi
+        await DbSeeder.SeedAsync(scope.ServiceProvider, logger);
     }
     catch (Exception ex)
     {
         logger.LogError(ex, "❌ Migration error: {Message}", ex.Message);
     }
->>>>>>> theirs
 }
 else
 {
@@ -108,12 +107,7 @@ else
     app.UseHsts();
 }
 
-using (IServiceScope scope = app.Services.CreateScope())
-{
-    ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    await db.Database.MigrateAsync();
-}
-
+// ✅ Uygulama yapılandırması
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
