@@ -121,7 +121,7 @@ else
                         <td>@(maintenance.EndDate.HasValue ? maintenance.EndDate.Value.ToLocalTime().ToString("dd.MM.yyyy") : "-")</td>
                         <td class="text-end">@maintenance.TotalCost.ToString("C2", CultureInfo.GetCultureInfo("tr-TR"))</td>
                         <td class="text-end">
-                            <button class="btn btn-sm btn-outline-primary" @onclick="() => NavigateToMaintenanceDetail(maintenance.Id)">
+                            <button class="btn btn-sm btn-outline-primary" @onclick="@(() => NavigateToMaintenanceDetail(maintenance.Id))">
                                 <i class="bi bi-search"></i> Detay
                             </button>
                         </td>
