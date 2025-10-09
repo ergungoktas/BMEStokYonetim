@@ -77,7 +77,7 @@ else
                         <div class="row g-3">
                             <div class="col-md-4">
                                 <label class="form-label">Planlanan Tarih</label>
-                                <InputDate<DateTime?> class="form-control" @bind-Value="plannedDate" />
+                                <InputDate TValue="DateTime?" class="form-control" @bind-Value="plannedDate" />
                             </div>
                             <div class="col d-flex align-items-end">
                                 <button class="btn btn-outline-primary" type="submit" disabled="@(isSavingWorkNotes)">
@@ -117,11 +117,11 @@ else
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label">Miktar</label>
-                                <InputNumber<int> class="form-control" @bind-Value="partModel.Quantity" />
+                                <InputNumber class="form-control" TValue="int" @bind-Value="partModel.Quantity" />
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label">Birim Maliyet</label>
-                                <InputNumber<decimal> class="form-control" @bind-Value="partModel.UnitCost" step="0.01" />
+                                <InputNumber class="form-control" TValue="decimal" @bind-Value="partModel.UnitCost" step="0.01" />
                             </div>
                             <div class="col-md-1 d-grid">
                                 <button class="btn btn-primary" type="submit" disabled="@(isSavingPart)">
@@ -199,11 +199,11 @@ else
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">Saat</label>
-                                <InputNumber<decimal> class="form-control" @bind-Value="personnelModel.HoursWorked" step="0.25" />
+                                <InputNumber class="form-control" TValue="decimal" @bind-Value="personnelModel.HoursWorked" step="0.25" />
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">Saatlik Ücret</label>
-                                <InputNumber<decimal> class="form-control" @bind-Value="personnelModel.HourlyRate" step="0.01" />
+                                <InputNumber class="form-control" TValue="decimal" @bind-Value="personnelModel.HourlyRate" step="0.01" />
                             </div>
                             <div class="col-md-1 d-grid">
                                 <button class="btn btn-primary" type="submit" disabled="@(isSavingPersonnel)">

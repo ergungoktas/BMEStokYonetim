@@ -56,14 +56,14 @@
         </div>
         <div class="col-md-4">
             <label class="form-label">Talep Tarihi</label>
-            <InputDate<DateTime> class="form-control" @bind-Value="formModel.RequestDate" />
+            <InputDate TValue="DateTime" class="form-control" @bind-Value="formModel.RequestDate" />
         </div>
     </div>
 
     <div class="row g-3 mt-1">
         <div class="col-md-4">
             <label class="form-label">Planlanan Tarih</label>
-            <InputDate<DateTime?> class="form-control" @bind-Value="formModel.PlannedDate" />
+            <InputDate TValue="DateTime?" class="form-control" @bind-Value="formModel.PlannedDate" />
         </div>
     </div>
 
