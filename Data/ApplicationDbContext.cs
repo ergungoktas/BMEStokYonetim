@@ -24,6 +24,7 @@ namespace BMEStokYonetim.Data
         public DbSet<StockMovement> StockMovements => Set<StockMovement>();
         public DbSet<AssetCategory> AssetCategories => Set<AssetCategory>();
         public DbSet<Asset> Assets => Set<Asset>();
+        public DbSet<FaultCode> FaultCodes => Set<FaultCode>();
         public DbSet<Maintenance> Maintenances => Set<Maintenance>();
         public DbSet<MaintenancePart> MaintenanceParts => Set<MaintenancePart>();
         public DbSet<MaintenancePersonnel> MaintenancePersonnels => Set<MaintenancePersonnel>();
@@ -215,6 +216,15 @@ namespace BMEStokYonetim.Data
                 _ = entity.Property(m => m.LaborCost).HasPrecision(18, 2);
                 _ = entity.Property(m => m.LaborHours).HasPrecision(18, 2);
                 _ = entity.Property(m => m.TotalCost).HasPrecision(18, 2);
+                _ = entity.HasOne(m => m.Asset)
+                    .WithMany(a => a.Maintenances)
+                    .HasForeignKey(m => m.AssetId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                _ = entity.HasOne(m => m.FaultCode)
+                    .WithMany(fc => fc.Maintenances)
+                    .HasForeignKey(m => m.FaultCodeId)
+                    .OnDelete(DeleteBehavior.Restrict);
             });
 
             _ = builder.Entity<MaintenancePart>(entity =>
@@ -228,6 +238,17 @@ namespace BMEStokYonetim.Data
                 _ = entity.Property(mp => mp.HoursWorked).HasPrecision(18, 2);
                 _ = entity.Property(mp => mp.HourlyRate).HasPrecision(18, 2);
                 _ = entity.Ignore(mp => mp.TotalCost);
+            });
+            #endregion
+
+            #region FaultCode Configuration
+            _ = builder.Entity<FaultCode>(entity =>
+            {
+                _ = entity.HasIndex(fc => fc.Code).IsUnique();
+                _ = entity.Property(fc => fc.Code).HasMaxLength(50);
+                _ = entity.Property(fc => fc.Name).HasMaxLength(150);
+                _ = entity.Property(fc => fc.Category).HasMaxLength(100);
+                _ = entity.Property(fc => fc.Description).HasMaxLength(500);
             });
             #endregion
 

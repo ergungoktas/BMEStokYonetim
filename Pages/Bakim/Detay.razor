@@ -1,0 +1,491 @@
+@page "/bakim/detay/{Id:int}"
+@using System.Globalization
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Data.ViewModels
+@using BMEStokYonetim.Helpers
+@using BMEStokYonetim.Services.Iservice
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@inject IMaintenanceService MaintenanceService
+@inject ApplicationDbContext DbContext
+@inject IUserContextService UserContextService
+@inject NavigationManager Navigation
+
+<h3 class="mb-3">Bakım / Arıza Detayı</h3>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+@if (!string.IsNullOrEmpty(successMessage))
+{
+    <div class="alert alert-success">@successMessage</div>
+}
+
+@if (isLoading)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+    </div>
+}
+else if (maintenance is null)
+{
+    <div class="alert alert-warning">
+        İstenen bakım kaydı bulunamadı.
+        <button class="btn btn-sm btn-outline-secondary ms-2" @onclick="() => Navigation.NavigateTo("/bakim")">Listeye Dön</button>
+    </div>
+}
+else
+{
+    <div class="row g-3">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+                        <div>
+                            <h5 class="card-title mb-1">@maintenance.Asset?.Name</h5>
+                            <div class="text-muted">Arıza Kodu: @(maintenance.FaultCode?.Code ?? "-" ) - @maintenance.FaultCode?.Name</div>
+                            <div class="text-muted">Kategori: @(maintenance.FaultCode?.Category ?? "-")</div>
+                        </div>
+                        <span class="badge fs-6 @GetStatusBadgeClass(maintenance.Status)">@maintenance.Status.GetDescription()</span>
+                    </div>
+
+                    <div class="row mb-3 text-muted small">
+                        <div class="col-md-4">
+                            <strong>Talep Tarihi:</strong> @maintenance.RequestDate.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                        </div>
+                        <div class="col-md-4">
+                            <strong>Planlanan Tarih:</strong> @(maintenance.PlannedDate.HasValue ? maintenance.PlannedDate.Value.ToLocalTime().ToString("dd.MM.yyyy") : "-" )
+                        </div>
+                        <div class="col-md-4">
+                            <strong>Tamamlanma:</strong> @(maintenance.EndDate.HasValue ? maintenance.EndDate.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm") : "-")
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <h6>Arıza Açıklaması</h6>
+                        <p class="mb-0">@maintenance.Description</p>
+                    </div>
+
+                    <EditForm Model="workNotes" OnValidSubmit="SaveWorkNotesAsync">
+                        <DataAnnotationsValidator />
+                        <div class="mb-3">
+                            <label class="form-label">Yapılan İş / Notlar</label>
+                            <InputTextArea class="form-control" Rows="4" @bind-Value="workNotes" placeholder="Bakım personelinin yaptığı işlemleri buraya yazınız." />
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Planlanan Tarih</label>
+                                <InputDate<DateTime?> class="form-control" @bind-Value="plannedDate" />
+                            </div>
+                            <div class="col d-flex align-items-end">
+                                <button class="btn btn-outline-primary" type="submit" disabled="@(isSavingWorkNotes)">
+                                    @if (isSavingWorkNotes)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                    }
+                                    Notları Kaydet
+                                </button>
+                            </div>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mt-3">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="card-title mb-0">Kullanılan Parçalar</h5>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="RefreshMaintenanceAsync">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                    </div>
+
+                    <EditForm Model="partModel" OnValidSubmit="AddPartAsync">
+                        <DataAnnotationsValidator />
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-5">
+                                <label class="form-label">Ürün</label>
+                                <InputSelect class="form-select" @bind-Value="partModel.ProductId">
+                                    <option value="">Ürün Seçiniz</option>
+                                    @foreach (Product product in products)
+                                    {
+                                        <option value="@product.Id">@product.Name (@product.Unit.GetDescription())</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Miktar</label>
+                                <InputNumber<int> class="form-control" @bind-Value="partModel.Quantity" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Birim Maliyet</label>
+                                <InputNumber<decimal> class="form-control" @bind-Value="partModel.UnitCost" step="0.01" />
+                            </div>
+                            <div class="col-md-1 d-grid">
+                                <button class="btn btn-primary" type="submit" disabled="@(isSavingPart)">
+                                    @if (isSavingPart)
+                                    {
+                                        <span class="spinner-border spinner-border-sm"></span>
+                                    }
+                                    Ekle
+                                </button>
+                            </div>
+                        </div>
+                        <ValidationSummary class="mt-2" />
+                    </EditForm>
+
+                    <div class="table-responsive mt-3">
+                        <table class="table table-sm table-striped align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Ürün</th>
+                                    <th class="text-end">Miktar</th>
+                                    <th class="text-end">Birim Maliyet</th>
+                                    <th class="text-end">Toplam</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (maintenance.Parts.Any())
+                                {
+                                    @foreach (MaintenancePart part in maintenance.Parts)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="fw-semibold">@part.Product?.Name</div>
+                                                <small class="text-muted">@part.Product?.Unit.GetDescription()</small>
+                                            </td>
+                                            <td class="text-end">@part.Quantity</td>
+                                            <td class="text-end">@part.UnitCost.ToString("C2", CultureInfo.GetCultureInfo("tr-TR"))</td>
+                                            <td class="text-end">@(part.TotalCost.ToString("C2", CultureInfo.GetCultureInfo("tr-TR")))</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => RemovePartAsync(part.Id)">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="5" class="text-center text-muted">Parça kaydı bulunmuyor</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mt-3">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="card-title mb-0">Çalışan Personeller</h5>
+                    </div>
+
+                    <EditForm Model="personnelModel" OnValidSubmit="AddPersonnelAsync">
+                        <DataAnnotationsValidator />
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label">Personel Adı</label>
+                                <InputText class="form-control" @bind-Value="personnelModel.PersonnelName" />
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Rol</label>
+                                <InputText class="form-control" @bind-Value="personnelModel.Role" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Saat</label>
+                                <InputNumber<decimal> class="form-control" @bind-Value="personnelModel.HoursWorked" step="0.25" />
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Saatlik Ücret</label>
+                                <InputNumber<decimal> class="form-control" @bind-Value="personnelModel.HourlyRate" step="0.01" />
+                            </div>
+                            <div class="col-md-1 d-grid">
+                                <button class="btn btn-primary" type="submit" disabled="@(isSavingPersonnel)">
+                                    @if (isSavingPersonnel)
+                                    {
+                                        <span class="spinner-border spinner-border-sm"></span>
+                                    }
+                                    Ekle
+                                </button>
+                            </div>
+                        </div>
+                        <ValidationSummary class="mt-2" />
+                    </EditForm>
+
+                    <div class="table-responsive mt-3">
+                        <table class="table table-sm table-striped align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Personel</th>
+                                    <th>Rol</th>
+                                    <th class="text-end">Saat</th>
+                                    <th class="text-end">Saatlik Ücret</th>
+                                    <th class="text-end">Toplam</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (maintenance.Personnels.Any())
+                                {
+                                    @foreach (MaintenancePersonnel personnel in maintenance.Personnels)
+                                    {
+                                        <tr>
+                                            <td>@personnel.PersonnelName</td>
+                                            <td>@(string.IsNullOrWhiteSpace(personnel.Role) ? "-" : personnel.Role)</td>
+                                            <td class="text-end">@personnel.HoursWorked</td>
+                                            <td class="text-end">@personnel.HourlyRate.ToString("C2", CultureInfo.GetCultureInfo("tr-TR"))</td>
+                                            <td class="text-end">@personnel.TotalCost.ToString("C2", CultureInfo.GetCultureInfo("tr-TR"))</td>
+                                            <td class="text-end">
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => RemovePersonnelAsync(personnel.Id)">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="6" class="text-center text-muted">Personel kaydı bulunmuyor</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Maliyet Özeti</h5>
+                    <ul class="list-unstyled">
+                        <li class="d-flex justify-content-between"><span>Parça Maliyeti</span><strong>@PartsCost.ToString("C2", CultureInfo.GetCultureInfo("tr-TR"))</strong></li>
+                        <li class="d-flex justify-content-between"><span>İşçilik Maliyeti</span><strong>@LaborCost.ToString("C2", CultureInfo.GetCultureInfo("tr-TR"))</strong></li>
+                        <li class="d-flex justify-content-between border-top pt-2 mt-2"><span>Toplam</span><strong class="text-primary">@TotalCost.ToString("C2", CultureInfo.GetCultureInfo("tr-TR"))</strong></li>
+                        <li class="d-flex justify-content-between mt-2"><span>Çalışan Sayısı</span><strong>@maintenance.Personnels.Count</strong></li>
+                        <li class="d-flex justify-content-between"><span>Toplam Saat</span><strong>@maintenance.LaborHours</strong></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mt-3">
+                <div class="card-body">
+                    <h5 class="card-title">Durum İşlemleri</h5>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-warning" disabled="@(maintenance.Status != BakimDurumu.MaintenancePlanned)" @onclick="() => UpdateStatusAsync(BakimDurumu.MaintenanceInProgress)">
+                            <i class="bi bi-play-circle me-1"></i> Bakım Başlat
+                        </button>
+                        <button class="btn btn-outline-success" disabled="@(maintenance.Status == BakimDurumu.MaintenanceCompleted)" @onclick="() => UpdateStatusAsync(BakimDurumu.MaintenanceCompleted)">
+                            <i class="bi bi-check-circle me-1"></i> Bakımı Tamamla
+                        </button>
+                        <button class="btn btn-outline-secondary" @onclick="() => Navigation.NavigateTo("/bakim")">
+                            <i class="bi bi-arrow-left me-1"></i> Listeye Dön
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Maintenance? maintenance;
+    private List<Product> products = new();
+    private MaintenancePartInputModel partModel = new();
+    private MaintenancePersonnelInputModel personnelModel = new();
+    private bool isLoading;
+    private bool isSavingPart;
+    private bool isSavingPersonnel;
+    private bool isSavingWorkNotes;
+    private string? errorMessage;
+    private string? successMessage;
+    private string? workNotes;
+    private DateTime? plannedDate;
+
+    private decimal PartsCost => maintenance?.Parts.Sum(p => p.TotalCost) ?? 0m;
+    private decimal LaborCost => maintenance?.Personnels.Sum(p => p.TotalCost) ?? 0m;
+    private decimal TotalCost => maintenance?.TotalCost ?? PartsCost + LaborCost;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            products = await DbContext.Products
+                .AsNoTracking()
+                .Where(p => p.IsActive)
+                .OrderBy(p => p.Name)
+                .ToListAsync();
+
+            maintenance = await MaintenanceService.GetMaintenanceAsync(Id);
+            if (maintenance != null)
+            {
+                workNotes = maintenance.WorkNotes;
+                plannedDate = maintenance.PlannedDate;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Veriler yüklenirken hata oluştu: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task RefreshMaintenanceAsync()
+    {
+        maintenance = await MaintenanceService.GetMaintenanceAsync(Id);
+        if (maintenance != null)
+        {
+            workNotes = maintenance.WorkNotes;
+            plannedDate = maintenance.PlannedDate;
+        }
+    }
+
+    private async Task UpdateStatusAsync(BakimDurumu status)
+    {
+        errorMessage = null;
+        successMessage = null;
+
+        string? userId = await UserContextService.GetCurrentUserIdAsync();
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            errorMessage = "Kullanıcı bilgisi alınamadı.";
+            return;
+        }
+
+        await MaintenanceService.UpdateStatusAsync(Id, status, userId);
+        await RefreshMaintenanceAsync();
+        successMessage = "Durum güncellendi.";
+    }
+
+    private async Task AddPartAsync()
+    {
+        errorMessage = null;
+        successMessage = null;
+
+        if (!partModel.ProductId.HasValue)
+        {
+            errorMessage = "Lütfen bir ürün seçiniz.";
+            return;
+        }
+
+        isSavingPart = true;
+        try
+        {
+            MaintenancePart? part = await MaintenanceService.AddPartAsync(Id, partModel.ProductId.Value, partModel.Quantity, partModel.UnitCost);
+            if (part == null)
+            {
+                errorMessage = "Parça eklenemedi. Girdi değerlerini kontrol ediniz.";
+                return;
+            }
+
+            partModel = new MaintenancePartInputModel();
+            await RefreshMaintenanceAsync();
+            successMessage = "Parça başarıyla eklendi.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Parça eklenirken hata oluştu: {ex.Message}";
+        }
+        finally
+        {
+            isSavingPart = false;
+        }
+    }
+
+    private async Task RemovePartAsync(int partId)
+    {
+        await MaintenanceService.RemovePartAsync(partId);
+        await RefreshMaintenanceAsync();
+    }
+
+    private async Task AddPersonnelAsync()
+    {
+        errorMessage = null;
+        successMessage = null;
+
+        if (string.IsNullOrWhiteSpace(personnelModel.PersonnelName))
+        {
+            errorMessage = "Lütfen personel adını giriniz.";
+            return;
+        }
+
+        isSavingPersonnel = true;
+        try
+        {
+            MaintenancePersonnel? personnel = await MaintenanceService.AddPersonnelAsync(Id, personnelModel.PersonnelName, personnelModel.HoursWorked, personnelModel.HourlyRate, role: personnelModel.Role);
+            if (personnel == null)
+            {
+                errorMessage = "Personel eklenemedi. Girdi değerlerini kontrol ediniz.";
+                return;
+            }
+
+            personnelModel = new MaintenancePersonnelInputModel();
+            await RefreshMaintenanceAsync();
+            successMessage = "Personel kaydedildi.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Personel eklenirken hata oluştu: {ex.Message}";
+        }
+        finally
+        {
+            isSavingPersonnel = false;
+        }
+    }
+
+    private async Task RemovePersonnelAsync(int personnelId)
+    {
+        await MaintenanceService.RemovePersonnelAsync(personnelId);
+        await RefreshMaintenanceAsync();
+    }
+
+    private async Task SaveWorkNotesAsync()
+    {
+        errorMessage = null;
+        successMessage = null;
+
+        isSavingWorkNotes = true;
+        try
+        {
+            await MaintenanceService.UpdateWorkInfoAsync(Id, workNotes, plannedDate);
+            await RefreshMaintenanceAsync();
+            successMessage = "Notlar güncellendi.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Notlar güncellenirken hata oluştu: {ex.Message}";
+        }
+        finally
+        {
+            isSavingWorkNotes = false;
+        }
+    }
+
+    private static string GetStatusBadgeClass(BakimDurumu status) => status switch
+    {
+        BakimDurumu.MaintenancePlanned => "bg-warning text-dark",
+        BakimDurumu.MaintenanceInProgress => "bg-info text-dark",
+        BakimDurumu.MaintenanceCompleted => "bg-success",
+        _ => "bg-secondary"
+    };
+}

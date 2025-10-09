@@ -15,18 +15,17 @@ namespace BMEStokYonetim.Data.Entities
         [ForeignKey("MaintenanceId")]
         public virtual Maintenance Maintenance { get; set; } = null!;
 
-        [Required]
-        public string UserId { get; set; } = string.Empty;
+        public string? UserId { get; set; }
 
         [ForeignKey("UserId")]
-        public virtual ApplicationUser User { get; set; } = null!;
+        public virtual ApplicationUser? User { get; set; }
 
         // Personelin rolü (ör. Usta, Yardımcı, Elektrikçi vb.)
-        [Required, StringLength(100)]
-        public string Role { get; set; } = string.Empty;
+        [StringLength(100)]
+        public string? Role { get; set; }
 
         // Kullanılacak isim gösterimi (UI için)
-        [StringLength(150)]
+        [Required, StringLength(150)]
         public string PersonnelName { get; set; } = string.Empty;
 
         // Çalıştığı saat (bakım/onarımda)
@@ -37,7 +36,7 @@ namespace BMEStokYonetim.Data.Entities
         public decimal HourlyRate { get; set; }
 
         // Toplam maliyet
-        [Column(TypeName = "decimal(18,2)")]
+        [NotMapped]
         public decimal TotalCost => HoursWorked * HourlyRate;
     }
 }
