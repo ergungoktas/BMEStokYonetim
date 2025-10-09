@@ -72,15 +72,15 @@
                 <tbody>
                     @if (faultCodes.Any())
                     {
-                        @foreach (FaultCode code in faultCodes)
+                        @foreach (FaultCode faultCode in faultCodes)
                         {
-                            <tr class="@(code.IsActive ? string.Empty : "table-secondary")">
-                                <td><strong>@code.Code</strong></td>
-                                <td>@code.Name</td>
-                                <td>@code.Category</td>
-                                <td>@code.Description</td>
+                            <tr class="@(faultCode.IsActive ? string.Empty : "table-secondary")">
+                                <td><strong>@faultCode.Code</strong></td>
+                                <td>@faultCode.Name</td>
+                                <td>@faultCode.Category</td>
+                                <td>@faultCode.Description</td>
                                 <td>
-                                    @if (code.IsActive)
+                                    @if (faultCode.IsActive)
                                     {
                                         <span class="badge bg-success">Aktif</span>
                                     }
@@ -90,8 +90,8 @@
                                     }
                                 </td>
                                 <td class="text-end">
-                                    <button class="btn btn-sm @(code.IsActive ? "btn-outline-danger" : "btn-outline-success")" @onclick="() => ToggleStatusAsync(code)">
-                                        @if (code.IsActive)
+                                    <button class="btn btn-sm @(faultCode.IsActive ? "btn-outline-danger" : "btn-outline-success")" @onclick="() => ToggleStatusAsync(faultCode)">
+                                        @if (faultCode.IsActive)
                                         {
                                             <span><i class="bi bi-x-circle"></i> Pasifleştir</span>
                                         }
@@ -168,12 +168,12 @@
         }
     }
 
-    private async Task ToggleStatusAsync(FaultCode code)
+    private async Task ToggleStatusAsync(FaultCode faultCode)
     {
         errorMessage = null;
         successMessage = null;
 
-        await MaintenanceService.UpdateFaultCodeStatusAsync(code.Id, !code.IsActive);
+        await MaintenanceService.UpdateFaultCodeStatusAsync(faultCode.Id, !faultCode.IsActive);
         await LoadFaultCodesAsync();
     }
 }

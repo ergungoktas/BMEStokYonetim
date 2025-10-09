@@ -14,7 +14,7 @@
         </div>
         <div class="col-md-2">
             <label class="form-label">Varlık ID</label>
-            <InputNumber class="form-control" @bind-Value="entityId" placeholder="ID" />
+            <InputNumber class="form-control" TValue="int" @bind-Value="entityId" placeholder="ID" />
         </div>
         <div class="col-md-3 d-flex align-items-end">
             <button class="btn btn-primary" @onclick="LoadHistory">Geçmişi Getir</button>

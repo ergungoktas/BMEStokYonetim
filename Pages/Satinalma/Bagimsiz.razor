@@ -100,10 +100,10 @@
                 </InputSelect>
             </div>
             <div class="col-md-1">
-                <InputNumber class="form-control" @bind-Value="newQuantity" placeholder="Miktar" />
+                <InputNumber class="form-control" TValue="int" @bind-Value="newQuantity" placeholder="Miktar" />
             </div>
             <div class="col-md-2">
-                <InputNumber class="form-control" @bind-Value="newUnitPrice" placeholder="Birim Fiyat" />
+                <InputNumber class="form-control" TValue="decimal" @bind-Value="newUnitPrice" placeholder="Birim Fiyat" />
             </div>
             <div class="col-md-2">
                 <InputSelect class="form-select" @bind-Value="newCurrency">
