@@ -217,20 +217,35 @@ namespace BMEStokYonetim.Services.Service
         // -------------------- MANUEL REZERVASYON --------------------
         public async Task ManualReserveAsync(int productId, int warehouseId, int quantity, string userId, string? note = null)
         {
-            StockReservation reservation = new()
-            {
-                ProductId = productId,
-                WarehouseId = warehouseId,
-                ReservedQuantity = quantity,
-                Type = ReservationType.Manual,
-                Status = RezervasyonDurumu.ReservationActive,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                ReleasedAt = DateTime.UtcNow.AddDays(1)
-            };
+            await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction = await _context.Database.BeginTransactionAsync();
 
-            _ = _context.StockReservations.Add(reservation);
-            _ = await _context.SaveChangesAsync();
+            try
+            {
+                await _warehouseService.ReserveStockAsync(warehouseId, productId, quantity);
+
+                StockReservation reservation = new()
+                {
+                    ProductId = productId,
+                    WarehouseId = warehouseId,
+                    ReservedQuantity = quantity,
+                    Type = ReservationType.Manual,
+                    Status = RezervasyonDurumu.ReservationActive,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    ReleasedAt = DateTime.UtcNow.AddDays(1),
+                    CreatedByUserId = userId
+                };
+
+                _ = _context.StockReservations.Add(reservation);
+                _ = await _context.SaveChangesAsync();
+
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         // -------------------- REZERVASYON İPTALİ --------------------
