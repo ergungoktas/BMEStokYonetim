@@ -20,7 +20,7 @@
             <i class="bi bi-arrow-clockwise me-1"></i> Yenile
         </button>
     </div>
-    <button class="btn btn-primary" @onclick="() => Navigation.NavigateTo("/bakim/yeni")">
+    <button class="btn btn-primary" @onclick="() => Navigation.NavigateTo(\"/bakim/yeni\")">
         <i class="bi bi-plus-circle me-1"></i> Yeni Bakım/Arıza Kaydı
     </button>
 </div>
@@ -121,7 +121,7 @@ else
                         <td>@(maintenance.EndDate.HasValue ? maintenance.EndDate.Value.ToLocalTime().ToString("dd.MM.yyyy") : "-")</td>
                         <td class="text-end">@maintenance.TotalCost.ToString("C2", CultureInfo.GetCultureInfo("tr-TR"))</td>
                         <td class="text-end">
-                            <button class="btn btn-sm btn-outline-primary" @onclick="() => Navigation.NavigateTo($"/bakim/detay/{maintenance.Id}")">
+                            <button class="btn btn-sm btn-outline-primary" @onclick="() => Navigation.NavigateTo($\"/bakim/detay/{maintenance.Id}\")">
                                 <i class="bi bi-search"></i> Detay
                             </button>
                         </td>
