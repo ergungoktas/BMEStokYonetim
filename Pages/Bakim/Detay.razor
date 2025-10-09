@@ -33,7 +33,7 @@ else if (maintenance is null)
 {
     <div class="alert alert-warning">
         İstenen bakım kaydı bulunamadı.
-        <button class="btn btn-sm btn-outline-secondary ms-2" @onclick='() => Navigation.NavigateTo("/bakim")'>Listeye Dön</button>
+        <button class="btn btn-sm btn-outline-secondary ms-2" @onclick="() => Navigation.NavigateTo(\"/bakim\")">Listeye Dön</button>
     </div>
 }
 else
@@ -286,7 +286,7 @@ else
                         <button class="btn btn-outline-success" disabled="@(maintenance.Status == BakimDurumu.MaintenanceCompleted)" @onclick="() => UpdateStatusAsync(BakimDurumu.MaintenanceCompleted)">
                             <i class="bi bi-check-circle me-1"></i> Bakımı Tamamla
                         </button>
-                        <button class="btn btn-outline-secondary" @onclick='() => Navigation.NavigateTo("/bakim")'>
+                        <button class="btn btn-outline-secondary" @onclick="() => Navigation.NavigateTo(\"/bakim\")">
                             <i class="bi bi-arrow-left me-1"></i> Listeye Dön
                         </button>
                     </div>
