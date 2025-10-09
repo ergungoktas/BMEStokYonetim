@@ -11,15 +11,16 @@ namespace BMEStokYonetim.Data.Entities
         public int AssetId { get; set; }
         public Asset Asset { get; set; } = null!;
 
-        public int TypeId { get; set; }
-
+        public int? FaultCodeId { get; set; }
+        public FaultCode? FaultCode { get; set; }
 
         public BakimDurumu Status { get; set; } = BakimDurumu.MaintenancePlanned;
 
-
-
         [MaxLength(500)]
         public string Description { get; set; } = string.Empty;
+
+        [MaxLength(1000)]
+        public string? WorkNotes { get; set; }
 
         // --- Tarihler ---
         public DateTime RequestDate { get; set; }

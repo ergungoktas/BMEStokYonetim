@@ -1,0 +1,189 @@
+@page "/bakim"
+@using System.Globalization
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Helpers
+@inject IMaintenanceService MaintenanceService
+@inject NavigationManager Navigation
+
+<h3 class="mb-3">Bakım &amp; Arıza Kayıtları</h3>
+
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div class="d-flex gap-2">
+        <select class="form-select" style="max-width: 220px;" @onchange="OnStatusFilterChanged">
+            <option value="">Tüm Durumlar</option>
+            @foreach (BakimDurumu status in Enum.GetValues<BakimDurumu>())
+            {
+                <option value="@((int)status)" selected="@(selectedStatus == status)">@status.GetDescription()</option>
+            }
+        </select>
+        <button class="btn btn-outline-secondary" @onclick="RefreshAsync">
+            <i class="bi bi-arrow-clockwise me-1"></i> Yenile
+        </button>
+    </div>
+    <button class="btn btn-primary" @onclick="() => Navigation.NavigateTo("/bakim/yeni")">
+        <i class="bi bi-plus-circle me-1"></i> Yeni Bakım/Arıza Kaydı
+    </button>
+</div>
+
+@if (isLoading)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+    </div>
+}
+else if (!filteredMaintenances.Any())
+{
+    <div class="alert alert-info">
+        Henüz bakım veya arıza kaydı bulunmuyor. Yeni bir kayıt oluşturmak için <strong>Yeni Bakım/Arıza Kaydı</strong> butonunu kullanabilirsiniz.
+    </div>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card shadow-sm">
+                <div class="card-body text-center">
+                    <h6 class="text-muted">Toplam Kayıt</h6>
+                    <span class="display-6">@filteredMaintenances.Count()</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm">
+                <div class="card-body text-center">
+                    <h6 class="text-muted">Devam Eden</h6>
+                    <span class="display-6 text-warning">@filteredMaintenances.Count(m => m.Status == BakimDurumu.MaintenanceInProgress)</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm">
+                <div class="card-body text-center">
+                    <h6 class="text-muted">Tamamlanan</h6>
+                    <span class="display-6 text-success">@filteredMaintenances.Count(m => m.Status == BakimDurumu.MaintenanceCompleted)</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm">
+                <div class="card-body text-center">
+                    <h6 class="text-muted">Toplam Maliyet</h6>
+                    <span class="display-6 text-primary">@filteredMaintenances.Sum(m => m.TotalCost).ToString("C2", CultureInfo.GetCultureInfo("tr-TR"))</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive shadow-sm">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th>
+                    <th>Varlık</th>
+                    <th>Arıza Kodu</th>
+                    <th>Durum</th>
+                    <th>Talep Tarihi</th>
+                    <th>Planlanan Tarih</th>
+                    <th>Tamamlanma</th>
+                    <th class="text-end">Toplam Maliyet</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (Maintenance maintenance in filteredMaintenances)
+                {
+                    <tr>
+                        <td>@maintenance.Id</td>
+                        <td>
+                            <div class="fw-semibold">@maintenance.Asset?.Name</div>
+                            @if (!string.IsNullOrWhiteSpace(maintenance.Asset?.PlateNumber))
+                            {
+                                <small class="text-muted">Plaka: @maintenance.Asset!.PlateNumber</small>
+                            }
+                        </td>
+                        <td>
+                            @if (maintenance.FaultCode is not null)
+                            {
+                                <span class="badge bg-secondary">@maintenance.FaultCode.Code</span>
+                                <div>@maintenance.FaultCode.Name</div>
+                                <small class="text-muted">@maintenance.FaultCode.Category</small>
+                            }
+                            else
+                            {
+                                <span class="text-muted">Arıza kodu yok</span>
+                            }
+                        </td>
+                        <td>
+                            <span class="badge @GetStatusBadgeClass(maintenance.Status)">@maintenance.Status.GetDescription()</span>
+                        </td>
+                        <td>@maintenance.RequestDate.ToLocalTime().ToString("dd.MM.yyyy")</td>
+                        <td>@(maintenance.PlannedDate.HasValue ? maintenance.PlannedDate.Value.ToLocalTime().ToString("dd.MM.yyyy") : "-")</td>
+                        <td>@(maintenance.EndDate.HasValue ? maintenance.EndDate.Value.ToLocalTime().ToString("dd.MM.yyyy") : "-")</td>
+                        <td class="text-end">@maintenance.TotalCost.ToString("C2", CultureInfo.GetCultureInfo("tr-TR"))</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-primary" @onclick="() => Navigation.NavigateTo($"/bakim/detay/{maintenance.Id}")">
+                                <i class="bi bi-search"></i> Detay
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private List<Maintenance> maintenances = new();
+    private bool isLoading;
+    private BakimDurumu? selectedStatus;
+
+    private IEnumerable<Maintenance> filteredMaintenances =>
+        selectedStatus is null
+            ? maintenances
+            : maintenances.Where(m => m.Status == selectedStatus);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMaintenancesAsync();
+    }
+
+    private async Task LoadMaintenancesAsync()
+    {
+        isLoading = true;
+        try
+        {
+            maintenances = await MaintenanceService.GetMaintenanceListAsync();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        await LoadMaintenancesAsync();
+    }
+
+    private async Task OnStatusFilterChanged(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out int statusValue))
+        {
+            selectedStatus = (BakimDurumu)statusValue;
+        }
+        else
+        {
+            selectedStatus = null;
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static string GetStatusBadgeClass(BakimDurumu status) => status switch
+    {
+        BakimDurumu.MaintenancePlanned => "bg-warning text-dark",
+        BakimDurumu.MaintenanceInProgress => "bg-info text-dark",
+        BakimDurumu.MaintenanceCompleted => "bg-success",
+        _ => "bg-secondary"
+    };
+}

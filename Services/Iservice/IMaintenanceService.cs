@@ -1,17 +1,31 @@
-﻿using BMEStokYonetim.Data.Entities;
+using BMEStokYonetim.Data.Entities;
 
 namespace BMEStokYonetim.Services.Iservice
 {
     public interface IMaintenanceService
     {
-        Task<int> CreateMaintenanceAsync(Maintenance maintenance, string userId);
+        Task<int> CreateMaintenanceAsync(Maintenance maintenance, string userId, CancellationToken cancellationToken = default);
 
-        // Artık enum kullanıyoruz
-        Task UpdateStatusAsync(int maintenanceId, BakimDurumu status, string userId);
+        Task<List<Maintenance>> GetMaintenanceListAsync(CancellationToken cancellationToken = default);
 
-        Task AddPartAsync(int maintenanceId, int productId, int quantity, decimal unitCost, string userId);
-        Task AddPersonnelAsync(int maintenanceId, string name, decimal hours, decimal rate);
+        Task<Maintenance?> GetMaintenanceAsync(int id, CancellationToken cancellationToken = default);
 
-        Task<Maintenance?> GetMaintenanceAsync(int id);
+        Task UpdateStatusAsync(int maintenanceId, BakimDurumu status, string userId, CancellationToken cancellationToken = default);
+
+        Task<MaintenancePart?> AddPartAsync(int maintenanceId, int productId, int quantity, decimal unitCost, CancellationToken cancellationToken = default);
+
+        Task RemovePartAsync(int partId, CancellationToken cancellationToken = default);
+
+        Task<MaintenancePersonnel?> AddPersonnelAsync(int maintenanceId, string personnelName, decimal hours, decimal rate, string? userId = null, string? role = null, CancellationToken cancellationToken = default);
+
+        Task RemovePersonnelAsync(int personnelId, CancellationToken cancellationToken = default);
+
+        Task UpdateWorkInfoAsync(int maintenanceId, string? workNotes, DateTime? plannedDate = null, CancellationToken cancellationToken = default);
+
+        Task<List<FaultCode>> GetFaultCodesAsync(bool onlyActive = true, CancellationToken cancellationToken = default);
+
+        Task<FaultCode> CreateFaultCodeAsync(FaultCode faultCode, CancellationToken cancellationToken = default);
+
+        Task UpdateFaultCodeStatusAsync(int id, bool isActive, CancellationToken cancellationToken = default);
     }
 }

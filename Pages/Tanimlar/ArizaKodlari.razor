@@ -1,0 +1,179 @@
+@page "/tanimlar/ariza-kodlari"
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Data.ViewModels
+@using BMEStokYonetim.Services.Iservice
+@using Microsoft.AspNetCore.Components.Forms
+
+@inject IMaintenanceService MaintenanceService
+
+<h3 class="mb-3">Arıza Kodları</h3>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+@if (!string.IsNullOrEmpty(successMessage))
+{
+    <div class="alert alert-success">@successMessage</div>
+}
+
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <h5 class="card-title">Yeni Arıza Kodu Tanımla</h5>
+        <EditForm Model="faultCodeModel" OnValidSubmit="CreateFaultCodeAsync">
+            <DataAnnotationsValidator />
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Kod</label>
+                    <InputText class="form-control" @bind-Value="faultCodeModel.Code" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Ad</label>
+                    <InputText class="form-control" @bind-Value="faultCodeModel.Name" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Kategori</label>
+                    <InputText class="form-control" @bind-Value="faultCodeModel.Category" />
+                </div>
+                <div class="col-md-2 d-grid">
+                    <label class="form-label opacity-0">.</label>
+                    <button class="btn btn-primary" type="submit" disabled="@(isSaving)">
+                        @if (isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Kaydet
+                    </button>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Açıklama</label>
+                    <InputTextArea class="form-control" Rows="2" @bind-Value="faultCodeModel.Description" />
+                </div>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <h5 class="card-title">Tanımlı Arıza Kodları</h5>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Kod</th>
+                        <th>Ad</th>
+                        <th>Kategori</th>
+                        <th>Açıklama</th>
+                        <th>Durum</th>
+                        <th class="text-end">İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (faultCodes.Any())
+                    {
+                        @foreach (FaultCode code in faultCodes)
+                        {
+                            <tr class="@(code.IsActive ? string.Empty : "table-secondary")">
+                                <td><strong>@code.Code</strong></td>
+                                <td>@code.Name</td>
+                                <td>@code.Category</td>
+                                <td>@code.Description</td>
+                                <td>
+                                    @if (code.IsActive)
+                                    {
+                                        <span class="badge bg-success">Aktif</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-secondary">Pasif</span>
+                                    }
+                                </td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm @(code.IsActive ? "btn-outline-danger" : "btn-outline-success")" @onclick="() => ToggleStatusAsync(code)">
+                                        @if (code.IsActive)
+                                        {
+                                            <span><i class="bi bi-x-circle"></i> Pasifleştir</span>
+                                        }
+                                        else
+                                        {
+                                            <span><i class="bi bi-check-circle"></i> Aktifleştir</span>
+                                        }
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">Henüz arıza kodu tanımlanmamış.</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly FaultCodeInputModel faultCodeModel = new();
+    private List<FaultCode> faultCodes = new();
+    private bool isSaving;
+    private string? errorMessage;
+    private string? successMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFaultCodesAsync();
+    }
+
+    private async Task LoadFaultCodesAsync()
+    {
+        faultCodes = await MaintenanceService.GetFaultCodesAsync(onlyActive: false);
+    }
+
+    private async Task CreateFaultCodeAsync()
+    {
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            FaultCode entity = new()
+            {
+                Code = faultCodeModel.Code,
+                Name = faultCodeModel.Name,
+                Category = faultCodeModel.Category,
+                Description = faultCodeModel.Description,
+                IsActive = true
+            };
+
+            isSaving = true;
+            await MaintenanceService.CreateFaultCodeAsync(entity);
+            successMessage = "Arıza kodu oluşturuldu.";
+            faultCodeModel.Code = string.Empty;
+            faultCodeModel.Name = string.Empty;
+            faultCodeModel.Category = string.Empty;
+            faultCodeModel.Description = string.Empty;
+            await LoadFaultCodesAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Arıza kodu oluşturulamadı: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task ToggleStatusAsync(FaultCode code)
+    {
+        errorMessage = null;
+        successMessage = null;
+
+        await MaintenanceService.UpdateFaultCodeStatusAsync(code.Id, !code.IsActive);
+        await LoadFaultCodesAsync();
+    }
+}

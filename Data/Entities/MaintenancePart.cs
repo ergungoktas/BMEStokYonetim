@@ -25,7 +25,8 @@ namespace BMEStokYonetim.Data.Entities
         [Required]
         public decimal UnitCost { get; set; }
 
-        public decimal TotalCost => Quantity * UnitCost; // ❌ sadece getter
+        [NotMapped]
+        public decimal TotalCost => Quantity * UnitCost;
 
         // Stok hareketi ile bağlama
         public int? StockMovementId { get; set; }
