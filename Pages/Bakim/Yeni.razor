@@ -81,7 +81,7 @@
             }
             Kaydet
         </button>
-        <button class="btn btn-secondary" type="button" @onclick="() => Navigation.NavigateTo("/bakim")">İptal</button>
+        <button class="btn btn-secondary" type="button" @onclick="NavigateBackToList">İptal</button>
     </div>
 </EditForm>
 
@@ -153,5 +153,10 @@
         {
             isSaving = false;
         }
+    }
+
+    private void NavigateBackToList()
+    {
+        Navigation.NavigateTo("/bakim");
     }
 }
