@@ -75,7 +75,7 @@ else
 
             <div class="col-md-3">
                 <label class="form-label">Miktar</label>
-                <InputNumber class="form-control" @bind-Value="model.Quantity" min="1" />
+                <InputNumber<int> class="form-control" @bind-Value="model.Quantity" min="1" />
                 <ValidationMessage For="() => model.Quantity" />
             </div>
 
@@ -92,22 +92,22 @@ else
 
             <div class="col-md-3">
                 <label class="form-label">Talep Kalemi (opsiyonel)</label>
-                <InputNumber class="form-control" @bind-Value="model.RequestItemId" />
+                <InputNumber<int?> class="form-control" @bind-Value="model.RequestItemId" />
             </div>
 
             <div class="col-md-3">
                 <label class="form-label">Varlık / Araç (opsiyonel)</label>
-                <InputNumber class="form-control" @bind-Value="model.AssetId" />
+                <InputNumber<int?> class="form-control" @bind-Value="model.AssetId" />
             </div>
 
             <div class="col-md-3">
                 <label class="form-label">KM (opsiyonel)</label>
-                <InputNumber class="form-control" @bind-Value="model.Km" />
+                <InputNumber<int?> class="form-control" @bind-Value="model.Km" />
             </div>
 
             <div class="col-md-3">
                 <label class="form-label">Çalışma Saati (opsiyonel)</label>
-                <InputNumber class="form-control" @bind-Value="model.HourMeter" />
+                <InputNumber<int?> class="form-control" @bind-Value="model.HourMeter" />
             </div>
 
             <div class="col-12">
