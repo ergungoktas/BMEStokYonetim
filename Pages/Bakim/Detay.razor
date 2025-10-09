@@ -33,7 +33,11 @@ else if (maintenance is null)
 {
     <div class="alert alert-warning">
         İstenen bakım kaydı bulunamadı.
+<<<<<<< ours
         <button class="btn btn-sm btn-outline-secondary ms-2" @onclick="() => Navigation.NavigateTo(\"/bakim\")">Listeye Dön</button>
+=======
+        <button class="btn btn-sm btn-outline-secondary ms-2" @onclick="NavigateToMaintenanceList">Listeye Dön</button>
+>>>>>>> theirs
     </div>
 }
 else

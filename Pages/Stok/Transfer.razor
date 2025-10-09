@@ -1,18 +1,12 @@
 @page "/stok/transfer"
-@using System.ComponentModel.DataAnnotations
 @using BMEStokYonetim.Data
 @using BMEStokYonetim.Data.Entities
-@using BMEStokYonetim.Helpers
-@using BMEStokYonetim.Services.Iservice
 @using Microsoft.AspNetCore.Components.Forms
-@using Microsoft.EntityFrameworkCore
 @inject ApplicationDbContext _context
 @inject IUserContextService UserContext
 @inject IStockService StockService
 
-<PageTitle>Stok Transferi</PageTitle>
-
-<h3 class="mb-3">Depolar Arası Transfer</h3>
+<h3>Depolar Arası Transfer</h3>
 
 @if (isLoading)
 {
@@ -20,16 +14,6 @@
 }
 else
 {
-    if (!string.IsNullOrWhiteSpace(errorMessage))
-    {
-        <div class="alert alert-danger">@errorMessage</div>
-    }
-
-    if (!string.IsNullOrWhiteSpace(successMessage))
-    {
-        <div class="alert alert-success">@successMessage</div>
-    }
-
     <EditForm EditContext="editContext" OnValidSubmit="HandleValidSubmit">
         <DataAnnotationsValidator />
         <ValidationSummary />
@@ -37,67 +21,40 @@ else
         <div class="row g-3">
             <div class="col-md-6">
                 <label class="form-label">Ürün</label>
-                <InputSelect class="form-select"
-                             TValue="int?"
-                             Value="model.ProductId"
-                             ValueChanged="OnProductChanged"
-                             ValueExpression="() => model.ProductId">
+                <InputSelect class="form-select" TValue="int?" @bind-Value="model.ProductId" @onchange="async e => await OnProductChanged(int.Parse(e.Value.ToString()))">
                     <option value="">Ürün seçiniz</option>
                     @foreach (var product in products)
                     {
-                        <option value="@product.Id">@product.Code - @product.Name (@product.Unit.GetDescription())</option>
+                        <option value="@product.Id">@product.Code - @product.Name</option>
                     }
                 </InputSelect>
-                <ValidationMessage For="() => model.ProductId" />
             </div>
 
             <div class="col-md-3">
                 <label class="form-label">Kaynak Depo</label>
-                <InputSelect class="form-select"
-                             TValue="int?"
-                             Value="model.FromWarehouseId"
-                             ValueChanged="OnFromWarehouseChanged"
-                             ValueExpression="() => model.FromWarehouseId"
-                             disabled="@(availableStocks.Count == 0)">
+                <InputSelect class="form-select" TValue="int?" @bind-Value="model.FromWarehouseId">
                     <option value="">Depo seçiniz</option>
                     @foreach (var warehouse in warehouses)
                     {
                         <option value="@warehouse.Id">@warehouse.Name</option>
                     }
                 </InputSelect>
-                <ValidationMessage For="() => model.FromWarehouseId" />
-                @if (model.FromWarehouseId.HasValue)
-                {
-                    int? available = GetAvailableForWarehouse(model.FromWarehouseId.Value);
-                    <small class="text-muted">Kaynak depoda uygun stok: @(available?.ToString() ?? "0")</small>
-                }
             </div>
 
             <div class="col-md-3">
                 <label class="form-label">Hedef Depo</label>
-                <InputSelect class="form-select"
-                             TValue="int?"
-                             Value="model.ToWarehouseId"
-                             ValueChanged="OnToWarehouseChanged"
-                             ValueExpression="() => model.ToWarehouseId">
+                <InputSelect class="form-select" TValue="int?" @bind-Value="model.ToWarehouseId">
                     <option value="">Depo seçiniz</option>
                     @foreach (var warehouse in warehouses)
                     {
                         <option value="@warehouse.Id" disabled="@(warehouse.Id == model.FromWarehouseId)">@warehouse.Name</option>
                     }
                 </InputSelect>
-                <ValidationMessage For="() => model.ToWarehouseId" />
             </div>
 
             <div class="col-md-3">
                 <label class="form-label">Miktar</label>
-                <InputNumber<int> class="form-control" @bind-Value="model.Quantity" min="1" />
-                <ValidationMessage For="() => model.Quantity" />
-            </div>
-
-            <div class="col-md-3">
-                <label class="form-label">Birim</label>
-                <InputText class="form-control" Value="@model.Unit.GetDescription()" readonly />
+                <InputNumber TValue="int" class="form-control" @bind-Value="model.Quantity" />
             </div>
 
             <div class="col-md-3">
@@ -107,236 +64,53 @@ else
 
             <div class="col-md-6">
                 <label class="form-label">Açıklama</label>
-                <InputTextArea class="form-control" rows="3" @bind-Value="model.Description" />
+                <InputTextArea class="form-control" rows="2" @bind-Value="model.Description" />
             </div>
         </div>
 
-        <div class="mt-4 d-flex gap-2">
-            <button class="btn btn-primary" type="submit" disabled="@isSubmitting">Transfer Et</button>
-            <button class="btn btn-secondary" type="button" @onclick="ResetForm" disabled="@isSubmitting">Temizle</button>
+        <div class="mt-3">
+            <button class="btn btn-primary" type="submit">Transfer Et</button>
         </div>
     </EditForm>
-
-    @if (model.ProductId.HasValue)
-    {
-        <div class="card mt-4">
-            <div class="card-header">Seçili Ürün Depo Durumu</div>
-            <div class="card-body p-0">
-                @if (!availableStocks.Any())
-                {
-                    <div class="p-3">Seçili ürün için stok kaydı bulunamadı.</div>
-                }
-                else
-                {
-                    <div class="table-responsive">
-                        <table class="table table-sm table-striped mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Depo</th>
-                                    <th>Toplam</th>
-                                    <th>Rezerve</th>
-                                    <th>Uygun</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var stock in availableStocks)
-                                {
-                                    <tr class="@(stock.AvailableQuantity == 0 ? "table-warning" : string.Empty)">
-                                        <td>@stock.Warehouse.Name</td>
-                                        <td>@stock.Quantity</td>
-                                        <td>@stock.ReservedQuantity</td>
-                                        <td>@stock.AvailableQuantity</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
-            </div>
-        </div>
-    }
 }
 
 @code {
     private List<Product> products = new();
     private List<Warehouse> warehouses = new();
-    private List<WarehouseStock> availableStocks = new();
-
     private TransferModel model = new();
     private EditContext? editContext;
     private bool isLoading = true;
-    private bool isSubmitting;
-    private string? successMessage;
-    private string? errorMessage;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadLookupsAsync();
-        ResetModel();
+        products = await _context.Products.OrderBy(p => p.Name).ToListAsync();
+        warehouses = await _context.Warehouses.OrderBy(w => w.Name).ToListAsync();
         editContext = new EditContext(model);
         isLoading = false;
-    }
-
-    private async Task LoadLookupsAsync()
-    {
-        products = await _context.Products
-            .AsNoTracking()
-            .OrderBy(p => p.Name)
-            .ToListAsync();
-
-        warehouses = await _context.Warehouses
-            .AsNoTracking()
-            .OrderBy(w => w.Name)
-            .ToListAsync();
     }
 
     private async Task OnProductChanged(int? productId)
     {
         model.ProductId = productId;
-        var product = products.FirstOrDefault(p => p.Id == productId);
-        model.Unit = product?.Unit ?? ProductUnit.None;
-
-        await LoadStocksForProductAsync();
-        model.FromWarehouseId = null;
-        model.ToWarehouseId = null;
-        editContext?.NotifyFieldChanged(FieldIdentifier.Create(() => model.FromWarehouseId));
-        editContext?.NotifyFieldChanged(FieldIdentifier.Create(() => model.ToWarehouseId));
-    }
-
-    private Task OnFromWarehouseChanged(int? warehouseId)
-    {
-        model.FromWarehouseId = warehouseId;
-        return Task.CompletedTask;
-    }
-
-    private Task OnToWarehouseChanged(int? warehouseId)
-    {
-        model.ToWarehouseId = warehouseId;
-        return Task.CompletedTask;
-    }
-
-    private async Task LoadStocksForProductAsync()
-    {
-        availableStocks.Clear();
-
-        if (model.ProductId.HasValue)
-        {
-            var stocks = await _context.WarehouseStocks
-                .AsNoTracking()
-                .Include(ws => ws.Warehouse)
-                .Where(ws => ws.ProductId == model.ProductId.Value)
-                .OrderBy(ws => ws.Warehouse.Name)
-                .ToListAsync();
-
-            availableStocks.AddRange(stocks);
-        }
+        await Task.CompletedTask;
     }
 
     private async Task HandleValidSubmit()
     {
-        errorMessage = null;
-        successMessage = null;
-
-        if (!model.ProductId.HasValue || !model.FromWarehouseId.HasValue || !model.ToWarehouseId.HasValue)
-        {
-            errorMessage = "Ürün ve depolar seçilmelidir.";
+        var userId = await UserContext.GetCurrentUserIdAsync();
+        if (string.IsNullOrEmpty(userId))
             return;
-        }
 
-        if (model.FromWarehouseId.Value == model.ToWarehouseId.Value)
-        {
-            errorMessage = "Kaynak ve hedef depo farklı olmalıdır.";
-            return;
-        }
-
-        var stock = availableStocks.FirstOrDefault(ws => ws.WarehouseId == model.FromWarehouseId.Value);
-
-        if (stock == null || stock.AvailableQuantity < model.Quantity)
-        {
-            errorMessage = "Kaynak depoda yeterli stok bulunmuyor.";
-            return;
-        }
-
-        isSubmitting = true;
-
-        try
-        {
-            var userId = await UserContext.GetCurrentUserIdAsync();
-            if (string.IsNullOrEmpty(userId))
-                throw new InvalidOperationException("Kullanıcı bilgisi alınamadı.");
-
-            await StockService.TransferAsync(
-                model.ProductId.Value,
-                model.Quantity,
-                model.FromWarehouseId.Value,
-                model.ToWarehouseId.Value,
-                userId,
-                model.DocumentNumber,
-                model.Description);
-
-            successMessage = "Transfer işlemi başarıyla tamamlandı.";
-
-            await LoadStocksForProductAsync();
-            ResetModel(model.ProductId, model.Unit);
-            editContext = new EditContext(model);
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Transfer sırasında hata oluştu: {ex.Message}";
-        }
-        finally
-        {
-            isSubmitting = false;
-        }
-    }
-
-    private void ResetForm()
-    {
-        int? productId = model.ProductId;
-        ProductUnit unit = model.Unit;
-        ResetModel(productId, unit);
-        editContext = new EditContext(model);
-        successMessage = null;
-        errorMessage = null;
-    }
-
-    private void ResetModel(int? productId = null, ProductUnit unit = ProductUnit.None)
-    {
-        model = new TransferModel
-        {
-            ProductId = productId,
-            Unit = unit,
-            Quantity = 1,
-            DocumentNumber = $"TR-{DateTime.Now:yyyyMMddHHmm}"
-        };
-    }
-
-    private int? GetAvailableForWarehouse(int warehouseId)
-    {
-        var stock = availableStocks.FirstOrDefault(ws => ws.WarehouseId == warehouseId);
-        return stock?.AvailableQuantity;
+        await StockService.TransferAsync(model.ProductId!.Value, model.Quantity, model.FromWarehouseId!.Value, model.ToWarehouseId!.Value, userId, model.DocumentNumber, model.Description);
     }
 
     private class TransferModel
     {
-        [Required(ErrorMessage = "Ürün seçiniz.")]
         public int? ProductId { get; set; }
-
-        [Required(ErrorMessage = "Kaynak depo seçiniz.")]
         public int? FromWarehouseId { get; set; }
-
-        [Required(ErrorMessage = "Hedef depo seçiniz.")]
         public int? ToWarehouseId { get; set; }
-
-        [Range(1, int.MaxValue, ErrorMessage = "Miktar 1 veya daha büyük olmalıdır.")]
-        public int Quantity { get; set; } = 1;
-
-        public ProductUnit Unit { get; set; } = ProductUnit.None;
-
-        [StringLength(50)]
+        public int Quantity { get; set; }
         public string DocumentNumber { get; set; } = string.Empty;
-
-        [StringLength(500)]
         public string? Description { get; set; }
     }
 }

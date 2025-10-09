@@ -7,9 +7,7 @@
 @inject IUserContextService UserContext
 @inject NavigationManager Nav
 
-<PageTitle>Yakıt Çıkışı</PageTitle>
-
-<h3 class="mb-3">Yakıt Çıkışı</h3>
+<h3>Yakıt Çıkışı</h3>
 
 @if (loading)
 {
@@ -17,88 +15,56 @@
 }
 else
 {
-    @if (!string.IsNullOrWhiteSpace(error))
-    {
-        <div class="alert alert-danger">@error</div>
-    }
-    @if (!string.IsNullOrWhiteSpace(success))
-    {
-        <div class="alert alert-success">@success</div>
-    }
-
-    <EditForm Model="@model" OnValidSubmit="@HandleSave">
+    <EditForm Model="@model" OnValidSubmit="HandleSave">
         <DataAnnotationsValidator />
         <ValidationSummary />
 
         <div class="row g-3">
             <div class="col-md-4">
-                <label class="form-label">Depo</label>
+                <label>Depo</label>
                 <InputSelect class="form-select" @bind-Value="model.SourceWarehouseId">
                     <option value="0">Seçiniz</option>
                     @foreach (var wh in warehouses)
                     {
-                        <option value="@wh.Id">@wh.Code - @wh.Name</option>
+                        <option value="@wh.Id">@wh.Name</option>
                     }
                 </InputSelect>
             </div>
 
             <div class="col-md-4">
-                <label class="form-label">Ürün</label>
-                <InputSelect class="form-select" @bind-Value="SelectedProductId">
+                <label>Ürün</label>
+                <InputSelect class="form-select" @bind-Value="model.ProductId">
                     <option value="0">Seçiniz</option>
                     @foreach (var p in products)
                     {
-                        <option value="@p.Id">@p.Code - @p.Name</option>
+                        <option value="@p.Id">@p.Name</option>
                     }
                 </InputSelect>
             </div>
 
             <div class="col-md-2">
-                <label class="form-label">Miktar</label>
-                <InputNumber<int> class="form-control" @bind-Value="model.Quantity" />
+                <label>Miktar</label>
+                <InputNumber TValue="int" class="form-control" @bind-Value="model.Quantity" />
             </div>
 
             <div class="col-md-2">
-                <label class="form-label">Birim</label>
+                <label>Birim</label>
                 <input class="form-control" value="@unitText" disabled />
             </div>
 
             <div class="col-md-4">
-                <label class="form-label">Varlık (opsiyonel)</label>
-                <InputSelect class="form-select" @bind-Value="model.AssetId">
-                    <option value="">Seçiniz</option>
-                    @foreach (var a in assets)
-                    {
-                        <option value="@a.Id">@a.Name @((!string.IsNullOrEmpty(a.PlateNumber)) ? $"({a.PlateNumber})" : "")</option>
-                    }
-                </InputSelect>
-            </div>
-
-            <div class="col-md-2">
-                <label class="form-label">KM</label>
-                <InputNumber<int?> class="form-control" @bind-Value="model.Km" />
-            </div>
-
-            <div class="col-md-2">
-                <label class="form-label">Saat</label>
-                <InputNumber<int?> class="form-control" @bind-Value="model.HourMeter" />
-            </div>
-
-            <div class="col-md-4">
-                <label class="form-label">Belge No</label>
+                <label>Belge No</label>
                 <InputText class="form-control" @bind-Value="model.DocumentNumber" />
             </div>
 
             <div class="col-md-8">
-                <label class="form-label">Açıklama</label>
+                <label>Açıklama</label>
                 <InputText class="form-control" @bind-Value="model.Description" />
             </div>
         </div>
 
-        <div class="mt-3 d-flex gap-2">
-            <button type="submit" class="btn btn-danger">
-                <i class="bi bi-dash-circle me-1"></i> Çıkışı Kaydet
-            </button>
+        <div class="mt-3">
+            <button type="submit" class="btn btn-danger">Çıkışı Kaydet</button>
             <button type="button" class="btn btn-secondary" @onclick="GoHome">Panele Dön</button>
         </div>
     </EditForm>
@@ -106,158 +72,33 @@ else
 
 @code {
     private bool loading = true;
-    private string? error;
-    private string? success;
-
+    private string? unitText = "Litre";
     private List<Warehouse> warehouses = new();
     private List<Product> products = new();
-    private List<Asset> assets = new();
-
     private MovementInput model = new();
-    private string unitText = "Litre";
-
-    private int SelectedProductId
-    {
-        get => model.ProductId;
-        set
-        {
-            model.ProductId = value;
-            _ = UpdateUnitAsync(value);
-        }
-    }
 
     protected override async Task OnInitializedAsync()
     {
-        try
-        {
-            await using var db = await ContextFactory.CreateDbContextAsync();
-
-            warehouses = await db.Warehouses
-                .Where(w => w.IsActive)
-                .OrderBy(w => w.Code)
-                .ToListAsync();
-
-            products = await db.Products
-                .Where(p => p.IsActive)
-                .OrderBy(p => p.Code)
-                .ToListAsync();
-
-            assets = await db.Assets
-                .Where(a => a.IsActive)
-                .OrderBy(a => a.Name)
-                .ToListAsync();
-        }
-        catch (Exception ex)
-        {
-            error = $"Yükleme hatası: {ex.Message}";
-        }
-        finally { loading = false; }
-    }
-
-    private async Task UpdateUnitAsync(int productId)
-    {
-        try
-        {
-            await using var db = await ContextFactory.CreateDbContextAsync();
-            var p = await db.Products.FirstOrDefaultAsync(x => x.Id == productId);
-            if (p != null)
-            {
-                unitText = p.Unit.ToString(); // ENUM -> string
-            }
-        }
-        catch { }
-        StateHasChanged();
+        await using var db = await ContextFactory.CreateDbContextAsync();
+        warehouses = await db.Warehouses.Where(w => w.IsActive).ToListAsync();
+        products = await db.Products.Where(p => p.IsActive).ToListAsync();
+        loading = false;
     }
 
     private async Task HandleSave()
     {
-        error = success = null;
-
-        if (model.SourceWarehouseId <= 0) { error = "Depo seçiniz."; return; }
-        if (model.ProductId <= 0) { error = "Ürün seçiniz."; return; }
-        if (model.Quantity <= 0) { error = "Miktar 0'dan büyük olmalı."; return; }
-
-        try
+        await using var db = await ContextFactory.CreateDbContextAsync();
+        db.StockMovements.Add(new StockMovement
         {
-            await using var db = await ContextFactory.CreateDbContextAsync();
-
-            var ws = await db.Set<WarehouseStock>()
-                .FirstOrDefaultAsync(s => s.WarehouseId == model.SourceWarehouseId && s.ProductId == model.ProductId);
-
-            var available = ws?.AvailableQuantity ?? 0;
-            if (available < model.Quantity)
-            {
-                error = $"Yetersiz stok. Mevcut: {available}";
-                return;
-            }
-
-            var product = await db.Products.FirstAsync(x => x.Id == model.ProductId);
-            unitText = product.Unit.ToString(); // ENUM -> string
-
-            var userId = UserContext.GetUserId();
-
-            var movement = new StockMovement
-            {
-                ProductId = model.ProductId,
-                Quantity = model.Quantity,
-                MovementDate = DateTime.Now,
-                Description = model.Description,
-                DocumentNumber = model.DocumentNumber,
-                SourceWarehouseId = model.SourceWarehouseId,
-                TargetWarehouseId = null,
-                UserId = userId,
-                AssetId = model.AssetId,
-                Km = model.Km,
-                HourMeter = model.HourMeter
-            };
-
-            SetMovementUnitFlexible(movement, product);
-
-            db.StockMovements.Add(movement);
-
-            if (ws == null)
-            {
-                error = "Depoda ürün kaydı bulunamadı.";
-                return;
-            }
-
-            ws.Quantity -= model.Quantity;
-            ws.LastUpdated = DateTime.Now;
-
-            if (model.AssetId.HasValue)
-            {
-                db.AssetUsageLogs.Add(new AssetUsageLog
-                {
-                    AssetId = model.AssetId.Value,
-                    LogDate = DateTime.Now,
-                    Km = model.Km,
-                    HourMeter = model.HourMeter,
-                    StockMovement = movement,
-                    Notes = $"Yakıt tüketimi: {model.Quantity} {unitText}"
-                });
-            }
-
-            await db.SaveChangesAsync();
-            success = "Yakıt çıkışı kaydedildi.";
-            model = new();
-            unitText = "Litre";
-        }
-        catch (Exception ex)
-        {
-            error = $"Kayıt hatası: {ex.Message}";
-        }
-    }
-
-    private static void SetMovementUnitFlexible(StockMovement movement, Product product)
-    {
-        var prop = typeof(StockMovement).GetProperty("Unit");
-        if (prop == null) return;
-
-        var t = prop.PropertyType;
-        if (t == typeof(string))
-            prop.SetValue(movement, product.Unit.ToString());
-        else
-            prop.SetValue(movement, product.Unit); // enum ise
+            ProductId = model.ProductId,
+            Quantity = model.Quantity,
+            SourceWarehouseId = model.SourceWarehouseId,
+            MovementDate = DateTime.Now,
+            DocumentNumber = model.DocumentNumber,
+            Description = model.Description,
+            UserId = UserContext.GetUserId()
+        });
+        await db.SaveChangesAsync();
     }
 
     private void GoHome() => Nav.NavigateTo("/");
@@ -267,9 +108,6 @@ else
         public int ProductId { get; set; }
         public int SourceWarehouseId { get; set; }
         public int Quantity { get; set; }
-        public int? AssetId { get; set; }
-        public int? Km { get; set; }
-        public int? HourMeter { get; set; }
         public string? DocumentNumber { get; set; }
         public string? Description { get; set; }
     }
