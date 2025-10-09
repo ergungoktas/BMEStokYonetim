@@ -377,6 +377,11 @@ else
         successMessage = "Durum güncellendi.";
     }
 
+    private void NavigateToMaintenanceList()
+    {
+        Navigation.NavigateTo("/bakim");
+    }
+
     private async Task AddPartAsync()
     {
         errorMessage = null;

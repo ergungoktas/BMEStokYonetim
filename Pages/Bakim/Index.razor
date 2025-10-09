@@ -147,6 +147,16 @@ else
         await LoadMaintenancesAsync();
     }
 
+    private void NavigateToNewMaintenance()
+    {
+        Navigation.NavigateTo("/bakim/yeni");
+    }
+
+    private void NavigateToMaintenanceDetail(int id)
+    {
+        Navigation.NavigateTo($"/bakim/detay/{id}");
+    }
+
     private async Task LoadMaintenancesAsync()
     {
         isLoading = true;
