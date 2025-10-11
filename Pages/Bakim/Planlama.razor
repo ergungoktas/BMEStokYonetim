@@ -1,0 +1,297 @@
+@page "/bakim/planlama/{Id:int}"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Helpers
+@using BMEStokYonetim.Services.Iservice
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop
+@inject ApplicationDbContext _context
+@inject IMaintenanceService MaintenanceService
+@inject IUserContextService UserContext
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="container-fluid py-4">
+    @if (loading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+        </div>
+    }
+    else if (maintenance == null)
+    {
+        <div class="alert alert-danger">Bakım kaydı bulunamadı!</div>
+    }
+    else
+    {
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0"><i class="bi bi-calendar-event"></i> Bakım Planlama - #@maintenance.Id</h4>
+            </div>
+            <div class="card-body">
+                <EditForm Model="maintenance" OnValidSubmit="SavePlanningAsync">
+                    <DataAnnotationsValidator />
+
+                    <!-- Varlık Bilgileri (Sadece Göster) -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="alert alert-info">
+                                <h5><i class="bi bi-truck"></i> @maintenance.Asset?.Name</h5>
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <strong>Plaka:</strong> @(maintenance.Asset?.PlateNumber ?? "Yok")
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>Seri No:</strong> @(maintenance.Asset?.SerialNumber ?? "Yok")
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>Marka:</strong> @(maintenance.Asset?.Brand ?? "Yok")
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>Model:</strong> @(maintenance.Asset?.Model ?? "Yok")
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Arıza Detayları -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6 class="text-danger"><i class="bi bi-exclamation-triangle"></i> Arıza Detayı</h6>
+                            <div class="alert alert-light">
+                                @maintenance.Description
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <!-- Planlama Tarihleri -->
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-calendar-check"></i> Planlanan Başlama Tarihi
+                                <span class="text-danger">*</span>
+                            </label>
+                            <InputDate TValue="DateTime?" class="form-control" @bind-Value="maintenance.PlannedDate" />
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-hourglass-split"></i> Tahmini Süre (Saat)
+                            </label>
+                            <InputNumber TValue="decimal" class="form-control" @bind-Value="estimatedHours" placeholder="8" />
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-flag"></i> Durum
+                            </label>
+                            <InputSelect class="form-select" @bind-Value="maintenance.Status">
+                                <option value="@BakimDurumu.BakimPlanlandi">Bakım Planlandı</option>
+                                <option value="@BakimDurumu.EkipAtandi">Ekip Atandı</option>
+                                <option value="@BakimDurumu.ParcaBekleniyor">Parça Bekleniyor</option>
+                            </InputSelect>
+                        </div>
+
+                        <!-- Arıza Kodu -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-code-square"></i> Arıza Kodu
+                            </label>
+                            <InputSelect class="form-select" @bind-Value="maintenance.FaultCodeId">
+                                <option value="">-- Arıza Kodu Seçiniz --</option>
+                                @foreach (var fc in faultCodes)
+                                {
+                                    <option value="@fc.Id">[@fc.Code] @fc.Name (@fc.Category)</option>
+                                }
+                            </InputSelect>
+                        </div>
+
+                        <!-- Tahmini Maliyet -->
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-cash-coin"></i> Tahmini İşçilik Maliyeti (₺)
+                            </label>
+                            <InputNumber TValue="decimal" class="form-control" @bind-Value="maintenance.LaborCost" placeholder="0.00" step="0.01" />
+                        </div>
+
+                        <!-- Personel Atama -->
+                        <div class="col-12">
+                            <h6 class="mt-3"><i class="bi bi-people-fill"></i> Bakım Ekibi Atama</h6>
+                            <div class="card">
+                                <div class="card-body">
+                                    @if (!personnel.Any())
+                                    {
+                                        <p class="text-muted">Henüz personel eklenmedi.</p>
+                                    }
+                                    else
+                                    {
+                                        <table class="table table-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>Personel</th>
+                                                    <th>Rol</th>
+                                                    <th style="width:100px">Tahmini Saat</th>
+                                                    <th style="width:150px">Saatlik Ücret (₺)</th>
+                                                    <th style="width:50px"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var p in personnel)
+                                                {
+                                                    <tr>
+                                                        <td>
+                                                            <InputSelect class="form-select form-select-sm" @bind-Value="p.UserId">
+                                                                <option value="">Manuel İsim</option>
+                                                                @foreach (var user in users)
+                                                                {
+                                                                    <option value="@user.Id">@user.FullName</option>
+                                                                }
+                                                            </InputSelect>
+                                                            @if (string.IsNullOrEmpty(p.UserId))
+                                                            {
+                                                                <InputText class="form-control form-control-sm mt-1" @bind-Value="p.PersonnelName" placeholder="İsim girin" />
+                                                            }
+                                                            else
+                                                            {
+                                                                var selectedUser = users.FirstOrDefault(u => u.Id == p.UserId);
+                                                                if (selectedUser != null)
+                                                                {
+                                                                    p.PersonnelName = selectedUser.FullName;
+                                                                }
+                                                            }
+                                                        </td>
+                                                        <td>
+                                                            <InputText class="form-control form-control-sm" @bind-Value="p.Role" placeholder="Ör: Usta" />
+                                                        </td>
+                                                        <td>
+                                                            <InputNumber TValue="decimal" class="form-control form-control-sm" @bind-Value="p.HoursWorked" />
+                                                        </td>
+                                                        <td>
+                                                            <InputNumber TValue="decimal" class="form-control form-control-sm" @bind-Value="p.HourlyRate" step="0.01" />
+                                                        </td>
+                                                        <td>
+                                                            <button type="button" class="btn btn-sm btn-outline-danger" @onclick="@(() => personnel.Remove(p))">
+                                                                <i class="bi bi-x"></i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    }
+                                    <button type="button" class="btn btn-sm btn-outline-primary" @onclick="AddPersonnel">
+                                        <i class="bi bi-plus-circle"></i> Personel Ekle
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Planlama Notları -->
+                        <div class="col-12">
+                            <label class="form-label fw-bold">
+                                <i class="bi bi-journal-text"></i> Planlama Notları
+                            </label>
+                            <InputTextArea class="form-control" rows="4" @bind-Value="maintenance.WorkNotes"
+                                           placeholder="Bakım planlaması hakkında notlar, gerekli malzemeler, dikkat edilecek hususlar..." />
+                        </div>
+                    </div>
+
+                    <!-- Butonlar -->
+                    <div class="mt-4 d-flex gap-2 justify-content-end">
+                        <button type="button" class="btn btn-secondary" @onclick="@(() => Nav.NavigateTo("/bakim/onay-bekleyenler"))">
+                            <i class="bi bi-arrow-left"></i> Geri
+                        </button>
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-check-circle"></i> Planlamayı Kaydet
+                        </button>
+                    </div>
+                </EditForm>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Maintenance? maintenance;
+    private List<FaultCode> faultCodes = new();
+    private List<ApplicationUser> users = new();
+    private List<MaintenancePersonnel> personnel = new();
+    private decimal estimatedHours = 8;
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        maintenance = await MaintenanceService.GetMaintenanceAsync(Id);
+
+        if (maintenance != null)
+        {
+            personnel = maintenance.Personnels.ToList();
+        }
+
+        faultCodes = await MaintenanceService.GetFaultCodesAsync();
+
+        users = await _context.Users
+            .Where(u => u.IsActive)
+            .OrderBy(u => u.FullName)
+            .ToListAsync();
+
+        loading = false;
+    }
+
+    private void AddPersonnel()
+    {
+        personnel.Add(new MaintenancePersonnel
+        {
+            MaintenanceId = Id,
+            PersonnelName = "",
+            HoursWorked = estimatedHours,
+            HourlyRate = 0m,
+            Role = ""
+        });
+    }
+
+    private async Task SavePlanningAsync()
+    {
+        if (maintenance == null) return;
+
+        // Personel kaydet
+        foreach (var p in personnel)
+        {
+            if (p.Id == 0) // Yeni personel
+            {
+                if (!string.IsNullOrWhiteSpace(p.PersonnelName))
+                {
+                    await MaintenanceService.AddPersonnelAsync(
+                        Id,
+                        p.PersonnelName,
+                        p.HoursWorked,
+                        p.HourlyRate,
+                        p.UserId,
+                        p.Role
+                    );
+                }
+            }
+        }
+
+        // Bakım bilgilerini güncelle
+        var userId = await UserContext.GetCurrentUserIdAsync();
+        await MaintenanceService.UpdateWorkInfoAsync(Id, maintenance.WorkNotes, maintenance.PlannedDate);
+        await MaintenanceService.UpdateStatusAsync(Id, maintenance.Status, userId ?? "");
+
+        // Arıza kodunu güncelle
+        var entity = await _context.Maintenances.FindAsync(Id);
+        if (entity != null)
+        {
+            entity.FaultCodeId = maintenance.FaultCodeId;
+            entity.LaborCost = maintenance.LaborCost;
+            await _context.SaveChangesAsync();
+        }
+
+        await JS.InvokeVoidAsync("alert", "Planlama başarıyla kaydedildi!");
+        Nav.NavigateTo("/bakim");
+    }
+}

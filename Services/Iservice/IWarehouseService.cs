@@ -18,6 +18,9 @@ namespace BMEStokYonetim.Services.Iservice
 
         Task<WarehouseSummary> GetWarehouseSummaryAsync(int warehouseId);
         Task<List<StockAlert>> GetStockAlertsAsync(int warehouseId);
+
+        // 🔹 Yeni eklendi: stok miktarını sorgulamak için
+        Task<int> GetAvailableQuantityAsync(int warehouseId, int productId);
     }
 
     // Yardımcı DTO'lar

@@ -1,0 +1,92 @@
+@page "/bakim/gunluk-kontroller"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Services.Iservice
+@using Microsoft.EntityFrameworkCore
+@inject IUserContextService UserContext
+@inject IAssetDailyCheckService CheckService
+@inject IDbContextFactory<ApplicationDbContext> ContextFactory
+@inject NavigationManager Nav
+
+<h3 class="mb-3">Günlük Kontrol Kayıtları</h3>
+
+@if (loading)
+{
+    <div class="alert alert-info">Yükleniyor...</div>
+}
+else
+{
+    <div class="d-flex justify-content-between mb-3">
+        <button class="btn btn-success" @onclick="YeniKayit">Yeni Günlük Kontrol</button>
+        <input type="date" @bind="filterDate" class="form-control w-auto" />
+    </div>
+
+    @if (records?.Any() == true)
+    {
+        <table class="table table-striped table-bordered align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Tarih</th>
+                    <th>Varlık</th>
+                    <th>Operatör</th>
+                    <th>KM</th>
+                    <th>Saat</th>
+                    <th>Arıza</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in records)
+                {
+                    <tr>
+                        <td>@r.CheckDate.ToString("dd.MM.yyyy")</td>
+                        <td>@r.Asset?.Name</td>
+                        <td>@r.User?.FullName</td>
+                        <td>@r.Km</td>
+                        <td>@r.HourMeter</td>
+                        <td>@(r.HasFault == true ? "Var" : "Yok")</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" @onclick="() => Detay(r.Id)">
+                                <i class="bi bi-eye"></i> Detay
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <div class="alert alert-warning">Kayıt bulunamadı.</div>
+    }
+}
+
+@code {
+    private bool loading = true;
+    private List<AssetDailyCheck>? records;
+    private DateOnly? filterDate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = await UserContext.GetCurrentUserIdAsync();
+        await using var db = await ContextFactory.CreateDbContextAsync();
+
+        // Operatör sadece kendi araçlarını görsün
+        var assets = await db.AssetResponsibilities
+            .Where(x => x.UserId == userId && x.IsActive)
+            .Select(x => x.AssetId)
+            .ToListAsync();
+
+        records = await db.AssetDailyChecks
+            .Include(x => x.Asset)
+            .Include(x => x.User)
+            .Where(x => assets.Contains(x.AssetId))
+            .OrderByDescending(x => x.CheckDate)
+            .ToListAsync();
+
+        loading = false;
+    }
+
+    private void YeniKayit() => Nav.NavigateTo("/bakim/gunluk-kontrol");
+    private void Detay(int id) => Nav.NavigateTo($"/bakim/gunluk-kontrol-detay/{id}");
+}

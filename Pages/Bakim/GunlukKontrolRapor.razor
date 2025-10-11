@@ -1,0 +1,85 @@
+@page "/bakim/gunluk-kontrol-rapor"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<ApplicationDbContext> ContextFactory
+
+<h3 class="mb-3">Günlük Kontrol Raporu</h3>
+
+<div class="row mb-3">
+    <div class="col-md-3">
+        <label>Başlangıç</label>
+        <InputDate TValue="DateOnly" class="form-control" @bind-Value="startDate" />
+    </div>
+    <div class="col-md-3">
+        <label>Bitiş</label>
+        <InputDate TValue="DateOnly" class="form-control" @bind-Value="endDate" />
+    </div>
+    <div class="col-md-3 align-self-end">
+        <button class="btn btn-primary" @onclick="Filtrele">Filtrele</button>
+    </div>
+</div>
+
+@if (records != null)
+{
+    <table class="table table-sm table-striped table-bordered">
+        <thead class="table-light">
+            <tr>
+                <th>Tarih</th>
+                <th>Varlık</th>
+                <th>Operatör</th>
+                <th>KM</th>
+                <th>Saat</th>
+                <th>Arıza</th>
+                <th>Not</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var r in records)
+            {
+                <tr>
+                    <td>@r.CheckDate.ToString("dd.MM.yyyy")</td>
+                    <td>@r.Asset?.Name</td>
+                    <td>@r.User?.FullName</td>
+                    <td>@r.Km</td>
+                    <td>@r.HourMeter</td>
+                    <td>@(r.HasFault == true ? "Var" : "Yok")</td>
+                    <td>@r.GeneralNotes</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <button class="btn btn-outline-success mt-3" @onclick="ExportExcel">Excel'e Aktar</button>
+}
+
+@code {
+    private DateOnly startDate = DateOnly.FromDateTime(DateTime.Today.AddDays(-7));
+    private DateOnly endDate = DateOnly.FromDateTime(DateTime.Today);
+    private List<AssetDailyCheck>? records;
+
+    private async Task Filtrele()
+    {
+        await using var db = await ContextFactory.CreateDbContextAsync();
+        records = await db.AssetDailyChecks
+            .Include(x => x.Asset)
+            .Include(x => x.User)
+            .Where(x => x.CheckDate >= startDate && x.CheckDate <= endDate)
+            .OrderByDescending(x => x.CheckDate)
+            .ToListAsync();
+    }
+
+    private async Task ExportExcel()
+    {
+        if (records == null || !records.Any()) return;
+        var file = Path.Combine("wwwroot", $"gunluk_kontrol_{DateTime.Now:yyyyMMddHHmmss}.csv");
+        using var writer = new StreamWriter(file);
+        writer.WriteLine("Tarih;Varlık;Operatör;KM;Saat;Arıza;Not");
+        foreach (var r in records)
+        {
+            writer.WriteLine($"{r.CheckDate};{r.Asset?.Name};{r.User?.FullName};{r.Km};{r.HourMeter};{(r.HasFault == true ? "Var" : "Yok")};{r.GeneralNotes}");
+        }
+        await writer.FlushAsync();
+    }
+}

@@ -1,5 +1,4 @@
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace BMEStokYonetim.Data.Entities
@@ -17,7 +16,8 @@ namespace BMEStokYonetim.Data.Entities
         public string Name { get; set; } = string.Empty;
 
         [Required, StringLength(100)]
-        public string Category { get; set; } = string.Empty;
+        public required string Category { get; set; }
+        public FaultCategory CategoryEnum { get; set; } // enum karşılığı ✅
 
         [StringLength(500)]
         public string? Description { get; set; }

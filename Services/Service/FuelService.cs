@@ -46,8 +46,7 @@ namespace BMEStokYonetim.Services.Service
                 entity.Code = w.Code;
                 entity.Name = w.Name;
                 entity.IsActive = w.IsActive;
-                // NOT: Warehouse sınıfı Code/Name/Type/LocationId alanlarıyla sınırlı.
-                // Description, TypeId veya ParentWarehouseId gibi eski alanlar artık mevcut değil.
+
             }
 
             _ = await _context.SaveChangesAsync();

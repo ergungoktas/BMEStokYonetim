@@ -1,0 +1,258 @@
+@page "/bakim/gorevlerim"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Helpers
+@using BMEStokYonetim.Services.Iservice
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext _context
+@inject IUserContextService UserContext
+@inject NavigationManager Nav
+
+<div class="container-fluid py-4">
+    <h3 class="mb-4"><i class="bi bi-tools"></i> Bakım Görevlerim</h3>
+
+    @if (loading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+        </div>
+    }
+    else if (!myTasks.Any())
+    {
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> Size atanmış aktif bakım görevi bulunmamaktadır.
+        </div>
+    }
+    else
+    {
+        <!-- İstatistikler -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card shadow-sm border-primary">
+                    <div class="card-body text-center">
+                        <i class="bi bi-hourglass-split display-4 text-primary"></i>
+                        <h6 class="mt-2">Bekleyen</h6>
+                        <h3>@myTasks.Count(t => t.Maintenance.Status == BakimDurumu.EkipAtandi || t.Maintenance.Status == BakimDurumu.BakimPlanlandi)</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card shadow-sm border-warning">
+                    <div class="card-body text-center">
+                        <i class="bi bi-gear-fill display-4 text-warning"></i>
+                        <h6 class="mt-2">Devam Eden</h6>
+                        <h3>@myTasks.Count(t => t.Maintenance.Status == BakimDurumu.BakimBasladi || t.Maintenance.Status == BakimDurumu.BakimDevamEdiyor)</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card shadow-sm border-info">
+                    <div class="card-body text-center">
+                        <i class="bi bi-pause-circle display-4 text-info"></i>
+                        <h6 class="mt-2">Parça Bekleniyor</h6>
+                        <h3>@myTasks.Count(t => t.Maintenance.Status == BakimDurumu.ParcaBekleniyor)</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card shadow-sm border-success">
+                    <div class="card-body text-center">
+                        <i class="bi bi-check-circle-fill display-4 text-success"></i>
+                        <h6 class="mt-2">Tamamlanan</h6>
+                        <h3>@completedTasks.Count()</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtre -->
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn @(selectedFilter == "all" ? "btn-primary" : "btn-outline-primary")" @onclick="@(() => selectedFilter = "all")">
+                        Tümü (@myTasks.Count())
+                    </button>
+                    <button class="btn @(selectedFilter == "waiting" ? "btn-warning" : "btn-outline-warning")" @onclick="@(() => selectedFilter = "waiting")">
+                        Bekleyen
+                    </button>
+                    <button class="btn @(selectedFilter == "active" ? "btn-success" : "btn-outline-success")" @onclick="@(() => selectedFilter = "active")">
+                        Aktif
+                    </button>
+                    <button class="btn @(selectedFilter == "completed" ? "btn-secondary" : "btn-outline-secondary")" @onclick="@(() => selectedFilter = "completed")">
+                        Tamamlanan
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Görev Kartları -->
+        <div class="row">
+            @foreach (var task in filteredTasks)
+            {
+                var m = task.Maintenance;
+                <div class="col-lg-6 mb-3">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header @GetStatusHeaderClass(m.Status) d-flex justify-content-between align-items-center">
+                            <span class="fw-bold">#@m.Id - @m.Asset?.Name</span>
+                            <span class="badge bg-white text-dark">@task.Role</span>
+                        </div>
+                        <div class="card-body">
+                            <!-- Varlık Bilgisi -->
+                            <div class="mb-2">
+                                <h6 class="text-primary"><i class="bi bi-truck"></i> @m.Asset?.Name</h6>
+                                @if (!string.IsNullOrEmpty(m.Asset?.PlateNumber))
+                                {
+                                    <small class="text-muted">🚗 @m.Asset.PlateNumber</small>
+                                }
+                            </div>
+
+                            <!-- Durum -->
+                            <div class="mb-2">
+                                <span class="badge @GetStatusBadgeClass(m.Status)">
+                                    @m.Status.GetDescription()
+                                </span>
+                            </div>
+
+                            <!-- Arıza Kodu -->
+                            @if (m.FaultCode != null)
+                            {
+                                <div class="mb-2">
+                                    <span class="badge bg-secondary">@m.FaultCode.Code</span>
+                                    <small>@m.FaultCode.Name</small>
+                                </div>
+                            }
+
+                            <!-- Açıklama -->
+                            <div class="alert alert-light mb-2" style="max-height: 100px; overflow-y: auto;">
+                                <small>@m.Description</small>
+                            </div>
+
+                            <!-- Tarihler -->
+                            <div class="row text-center mb-2">
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Planlanan</small>
+                                    <strong>@(m.PlannedDate?.ToString("dd.MM.yyyy") ?? "Belirsiz")</strong>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted d-block">Çalışma Saatiniz</small>
+                                    <strong class="text-primary">@task.HoursWorked saat</strong>
+                                </div>
+                            </div>
+
+                            <!-- Notlar -->
+                            @if (!string.IsNullOrWhiteSpace(m.WorkNotes))
+                            {
+                                <div class="alert alert-warning p-2 mb-2">
+                                    <small><strong><i class="bi bi-info-circle"></i> Not:</strong> @m.WorkNotes</small>
+                                </div>
+                            }
+                        </div>
+                        <div class="card-footer bg-white d-flex gap-2 justify-content-end">
+                            @if (m.Status == BakimDurumu.EkipAtandi || m.Status == BakimDurumu.BakimPlanlandi)
+                            {
+                                <button class="btn btn-success" @onclick="@(() => Nav.NavigateTo($"/bakim/calisma/{m.Id}"))">
+                                    <i class="bi bi-play-fill"></i> Başla
+                                </button>
+                            }
+                            else if (m.Status == BakimDurumu.BakimBasladi || m.Status == BakimDurumu.BakimDevamEdiyor)
+                            {
+                                <button class="btn btn-warning" @onclick="@(() => Nav.NavigateTo($"/bakim/calisma/{m.Id}"))">
+                                    <i class="bi bi-arrow-repeat"></i> Devam Et
+                                </button>
+                            }
+                            else if (m.Status == BakimDurumu.ParcaBekleniyor)
+                            {
+                                <button class="btn btn-info" @onclick="@(() => Nav.NavigateTo($"/bakim/calisma/{m.Id}"))">
+                                    <i class="bi bi-box-seam"></i> Parça Kontrolü
+                                </button>
+                            }
+                            else if (m.Status == BakimDurumu.BakimTamamlandi || m.Status == BakimDurumu.TestEdiliyor)
+                            {
+                                <button class="btn btn-outline-secondary" @onclick="@(() => Nav.NavigateTo($"/bakim/detay/{m.Id}"))">
+                                    <i class="bi bi-eye"></i> Görüntüle
+                                </button>
+                            }
+
+                            <button class="btn btn-outline-primary" @onclick="@(() => Nav.NavigateTo($"/bakim/detay/{m.Id}"))">
+                                <i class="bi bi-info-circle"></i> Detay
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<MaintenancePersonnel> myTasks = new();
+    private List<MaintenancePersonnel> completedTasks = new();
+    private bool loading = true;
+    private string selectedFilter = "all";
+
+    private IEnumerable<MaintenancePersonnel> filteredTasks
+    {
+        get
+        {
+            return selectedFilter switch
+            {
+                "waiting" => myTasks.Where(t => t.Maintenance.Status == BakimDurumu.EkipAtandi || t.Maintenance.Status == BakimDurumu.BakimPlanlandi),
+                "active" => myTasks.Where(t => t.Maintenance.Status == BakimDurumu.BakimBasladi || t.Maintenance.Status == BakimDurumu.BakimDevamEdiyor || t.Maintenance.Status == BakimDurumu.ParcaBekleniyor),
+                "completed" => completedTasks,
+                _ => myTasks
+            };
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = await UserContext.GetCurrentUserIdAsync();
+
+        if (!string.IsNullOrEmpty(userId))
+        {
+            // Aktif görevler
+            myTasks = await _context.MaintenancePersonnels
+                .Include(mp => mp.Maintenance).ThenInclude(m => m.Asset)
+                .Include(mp => mp.Maintenance).ThenInclude(m => m.FaultCode)
+                .Where(mp => mp.UserId == userId && mp.Maintenance.Status != BakimDurumu.BakimTamamlandi && mp.Maintenance.Status != BakimDurumu.TeslimEdildi)
+                .OrderBy(mp => mp.Maintenance.PlannedDate)
+                .ToListAsync();
+
+            // Tamamlanan görevler (son 30 gün)
+            var thirtyDaysAgo = DateTime.Now.AddDays(-30);
+            completedTasks = await _context.MaintenancePersonnels
+                .Include(mp => mp.Maintenance).ThenInclude(m => m.Asset)
+                .Include(mp => mp.Maintenance).ThenInclude(m => m.FaultCode)
+                .Where(mp => mp.UserId == userId
+                    && (mp.Maintenance.Status == BakimDurumu.BakimTamamlandi || mp.Maintenance.Status == BakimDurumu.TeslimEdildi)
+                    && mp.Maintenance.EndDate >= thirtyDaysAgo)
+                .OrderByDescending(mp => mp.Maintenance.EndDate)
+                .ToListAsync();
+        }
+
+        loading = false;
+    }
+
+    private static string GetStatusBadgeClass(BakimDurumu status) => status switch
+    {
+        BakimDurumu.EkipAtandi => "bg-primary",
+        BakimDurumu.BakimPlanlandi => "bg-info",
+        BakimDurumu.BakimBasladi => "bg-warning text-dark",
+        BakimDurumu.BakimDevamEdiyor => "bg-warning text-dark",
+        BakimDurumu.ParcaBekleniyor => "bg-secondary",
+        BakimDurumu.BakimTamamlandi => "bg-success",
+        BakimDurumu.TestEdiliyor => "bg-info",
+        _ => "bg-secondary"
+    };
+
+    private static string GetStatusHeaderClass(BakimDurumu status) => status switch
+    {
+        BakimDurumu.EkipAtandi => "bg-primary text-white",
+        BakimDurumu.BakimPlanlandi => "bg-info text-white",
+        BakimDurumu.BakimBasladi => "bg-warning",
+        BakimDurumu.BakimDevamEdiyor => "bg-warning",
+        BakimDurumu.ParcaBekleniyor => "bg-secondary text-white",
+        BakimDurumu.BakimTamamlandi => "bg-success text-white",
+        _ => "bg-light"
+    };
+}

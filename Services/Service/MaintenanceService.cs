@@ -1,18 +1,12 @@
-using BMEStokYonetim.Data;
+﻿using BMEStokYonetim.Data;
 using BMEStokYonetim.Data.Entities;
-using BMEStokYonetim.Services.Iservice;
 using Microsoft.EntityFrameworkCore;
 
 namespace BMEStokYonetim.Services.Service
 {
-    public class MaintenanceService : IMaintenanceService
+    public class MaintenanceService(ApplicationDbContext context) : IMaintenanceService
     {
-        private readonly ApplicationDbContext _context;
-
-        public MaintenanceService(ApplicationDbContext context)
-        {
-            _context = context;
-        }
+        private readonly ApplicationDbContext _context = context;
 
         public async Task<int> CreateMaintenanceAsync(Maintenance maintenance, string userId, CancellationToken cancellationToken = default)
         {
@@ -23,7 +17,7 @@ namespace BMEStokYonetim.Services.Service
             }
 
             _ = _context.Maintenances.Add(maintenance);
-            await _context.SaveChangesAsync(cancellationToken);
+            _ = await _context.SaveChangesAsync(cancellationToken);
             return maintenance.Id;
         }
 
@@ -62,36 +56,28 @@ namespace BMEStokYonetim.Services.Service
 
             entity.Status = status;
 
-            if (status == BakimDurumu.MaintenanceInProgress && entity.StartDate is null)
+            if (status == BakimDurumu.BakimBasladi && entity.StartDate is null)
             {
                 entity.StartDate = DateTime.UtcNow;
             }
 
-            if (status == BakimDurumu.MaintenanceCompleted)
+            if (status == BakimDurumu.BakimTamamlandi)
             {
                 entity.EndDate = DateTime.UtcNow;
-                if (entity.StartDate is null)
-                {
-                    entity.StartDate = entity.EndDate;
-                }
+                entity.StartDate ??= entity.EndDate;
             }
 
-            await _context.SaveChangesAsync(cancellationToken);
+            _ = await _context.SaveChangesAsync(cancellationToken);
         }
 
         public async Task<MaintenancePart?> AddPartAsync(int maintenanceId, int productId, int quantity, decimal unitCost, CancellationToken cancellationToken = default)
         {
-            if (quantity <= 0)
+            if (quantity <= 0 || unitCost < 0)
             {
                 return null;
             }
 
-            if (unitCost < 0)
-            {
-                return null;
-            }
-
-            Maintenance? maintenance = await _context.Maintenances.FindAsync(new object?[] { maintenanceId }, cancellationToken);
+            Maintenance? maintenance = await _context.Maintenances.FindAsync([maintenanceId], cancellationToken);
             if (maintenance == null)
             {
                 return null;
@@ -112,8 +98,7 @@ namespace BMEStokYonetim.Services.Service
             };
 
             _ = _context.MaintenanceParts.Add(part);
-            await _context.SaveChangesAsync(cancellationToken);
-
+            _ = await _context.SaveChangesAsync(cancellationToken);
             await RecalculateTotalsAsync(maintenanceId, cancellationToken);
             return part;
         }
@@ -128,7 +113,7 @@ namespace BMEStokYonetim.Services.Service
 
             int maintenanceId = part.MaintenanceId;
             _ = _context.MaintenanceParts.Remove(part);
-            await _context.SaveChangesAsync(cancellationToken);
+            _ = await _context.SaveChangesAsync(cancellationToken);
             await RecalculateTotalsAsync(maintenanceId, cancellationToken);
         }
 
@@ -139,7 +124,7 @@ namespace BMEStokYonetim.Services.Service
                 return null;
             }
 
-            Maintenance? maintenance = await _context.Maintenances.FindAsync(new object?[] { maintenanceId }, cancellationToken);
+            Maintenance? maintenance = await _context.Maintenances.FindAsync([maintenanceId], cancellationToken);
             if (maintenance == null)
             {
                 return null;
@@ -156,8 +141,7 @@ namespace BMEStokYonetim.Services.Service
             };
 
             _ = _context.MaintenancePersonnels.Add(personnel);
-            await _context.SaveChangesAsync(cancellationToken);
-
+            _ = await _context.SaveChangesAsync(cancellationToken);
             await RecalculateTotalsAsync(maintenanceId, cancellationToken);
             return personnel;
         }
@@ -172,7 +156,7 @@ namespace BMEStokYonetim.Services.Service
 
             int maintenanceId = personnel.MaintenanceId;
             _ = _context.MaintenancePersonnels.Remove(personnel);
-            await _context.SaveChangesAsync(cancellationToken);
+            _ = await _context.SaveChangesAsync(cancellationToken);
             await RecalculateTotalsAsync(maintenanceId, cancellationToken);
         }
 
@@ -187,7 +171,7 @@ namespace BMEStokYonetim.Services.Service
             entity.WorkNotes = string.IsNullOrWhiteSpace(workNotes) ? null : workNotes.Trim();
             entity.PlannedDate = plannedDate;
 
-            await _context.SaveChangesAsync(cancellationToken);
+            _ = await _context.SaveChangesAsync(cancellationToken);
         }
 
         public async Task<List<FaultCode>> GetFaultCodesAsync(bool onlyActive = true, CancellationToken cancellationToken = default)
@@ -212,7 +196,7 @@ namespace BMEStokYonetim.Services.Service
             faultCode.Description = string.IsNullOrWhiteSpace(faultCode.Description) ? null : faultCode.Description.Trim();
 
             _ = _context.FaultCodes.Add(faultCode);
-            await _context.SaveChangesAsync(cancellationToken);
+            _ = await _context.SaveChangesAsync(cancellationToken);
             return faultCode;
         }
 
@@ -225,7 +209,33 @@ namespace BMEStokYonetim.Services.Service
             }
 
             faultCode.IsActive = isActive;
-            await _context.SaveChangesAsync(cancellationToken);
+            _ = await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        public async Task<Maintenance?> GetMaintenanceFormAsync(int id, CancellationToken cancellationToken = default)
+        {
+            return await _context.Maintenances
+                .Include(m => m.Asset)
+                .Include(m => m.FaultCode)
+                .Include(m => m.Parts).ThenInclude(p => p.Product)
+                .Include(m => m.Personnels)
+                .FirstOrDefaultAsync(m => m.Id == id, cancellationToken);
+        }
+
+        public async Task<string?> GetAssetNameAsync(int assetId, CancellationToken cancellationToken = default)
+        {
+            Asset? asset = await _context.Assets.AsNoTracking().FirstOrDefaultAsync(a => a.Id == assetId, cancellationToken);
+            return asset?.Name;
+        }
+
+        public async Task<bool> SaveMaintenanceAsync(Maintenance maintenance, CancellationToken cancellationToken = default)
+        {
+            _ = maintenance.Id == 0
+                ? await _context.Maintenances.AddAsync(maintenance, cancellationToken)
+                : _context.Maintenances.Update(maintenance);
+
+            _ = await _context.SaveChangesAsync(cancellationToken);
+            return true;
         }
 
         private async Task RecalculateTotalsAsync(int maintenanceId, CancellationToken cancellationToken = default)
@@ -248,7 +258,21 @@ namespace BMEStokYonetim.Services.Service
             maintenance.LaborCost = laborCost;
             maintenance.TotalCost = laborCost + partsCost;
 
-            await _context.SaveChangesAsync(cancellationToken);
+            _ = await _context.SaveChangesAsync(cancellationToken);
+        }
+
+        public Task<Maintenance> CreateMaintenanceAsyncModel()
+        {
+            Maintenance maintenance = new()
+            {
+                RequestDate = DateTime.Now,
+                Status = BakimDurumu.TalepOlusturuldu,
+                LaborHours = 0m,
+                LaborCost = 0m,
+                TotalCost = 0m
+            };
+
+            return Task.FromResult(maintenance);
         }
     }
 }

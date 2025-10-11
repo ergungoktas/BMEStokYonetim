@@ -2,15 +2,32 @@
 @using BMEStokYonetim.Data
 @using BMEStokYonetim.Data.Entities
 @using Microsoft.AspNetCore.Components.Forms
-@inject ApplicationDbContext _context
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop
 @inject IUserContextService UserContext
 @inject IStockService StockService
+@inject IWarehouseService WarehouseService
+@inject ApplicationDbContext _context
+@inject IJSRuntime JS
+@inject IDbContextFactory<ApplicationDbContext> ContextFactory
+
 
 <h3>Depolar Arası Transfer</h3>
 
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+@if (!string.IsNullOrEmpty(successMessage))
+{
+    <div class="alert alert-success">@successMessage</div>
+}
+
+
+
 @if (isLoading)
 {
-    <p><em>Yükleniyor...</em></p>
+    <div class="alert alert-info">Yükleniyor...</div>
 }
 else
 {
@@ -18,99 +35,405 @@ else
         <DataAnnotationsValidator />
         <ValidationSummary />
 
-        <div class="row g-3">
-            <div class="col-md-6">
-                <label class="form-label">Ürün</label>
-                <InputSelect class="form-select" TValue="int?" @bind-Value="model.ProductId" @onchange="async e => await OnProductChanged(int.Parse(e.Value.ToString()))">
-                    <option value="">Ürün seçiniz</option>
-                    @foreach (var product in products)
+        <!-- Lokasyon ve Depo Seçimi -->
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <label class="form-label" for="fromLoc">Kaynak Lokasyon</label>
+                <InputSelect id="fromLoc" class="form-select"
+                             Value="model.FromLocationId"
+                             ValueChanged="@(async (int? val) => await OnFromLocationChangedAsync(val))"
+                             ValueExpression="() => model.FromLocationId">
+                    <option value="">Seçiniz</option>
+                    @foreach (var loc in locations)
                     {
-                        <option value="@product.Id">@product.Code - @product.Name</option>
+                        <option value="@loc.Id">@loc.Name</option>
                     }
                 </InputSelect>
             </div>
 
             <div class="col-md-3">
-                <label class="form-label">Kaynak Depo</label>
-                <InputSelect class="form-select" TValue="int?" @bind-Value="model.FromWarehouseId">
-                    <option value="">Depo seçiniz</option>
-                    @foreach (var warehouse in warehouses)
+                <label class="form-label" for="fromWh">Kaynak Depo</label>
+                <InputSelect id="fromWh" class="form-select"
+                             @key="model.FromLocationId"
+                             Value="model.FromWarehouseId"
+                             ValueChanged="@(async (int? val) => await OnFromWarehouseChangedAsync(val))"
+                             ValueExpression="() => model.FromWarehouseId"
+                             disabled="@(!model.FromLocationId.HasValue)">
+                    <option value="">Seçiniz</option>
+                    @foreach (var w in fromWarehouses)
                     {
-                        <option value="@warehouse.Id">@warehouse.Name</option>
+                        <option value="@w.Id">@($"{w.Code} - {w.Name}")</option>
                     }
                 </InputSelect>
             </div>
 
             <div class="col-md-3">
-                <label class="form-label">Hedef Depo</label>
-                <InputSelect class="form-select" TValue="int?" @bind-Value="model.ToWarehouseId">
-                    <option value="">Depo seçiniz</option>
-                    @foreach (var warehouse in warehouses)
+                <label class="form-label" for="toLoc">Hedef Lokasyon</label>
+                <InputSelect id="toLoc" class="form-select"
+                             Value="model.ToLocationId"
+                             ValueChanged="@(async (int? val) => await OnToLocationChangedAsync(val))"
+                             ValueExpression="() => model.ToLocationId">
+                    <option value="">Seçiniz</option>
+                    @foreach (var loc in locations)
                     {
-                        <option value="@warehouse.Id" disabled="@(warehouse.Id == model.FromWarehouseId)">@warehouse.Name</option>
+                        <option value="@loc.Id">@loc.Name</option>
                     }
                 </InputSelect>
             </div>
 
             <div class="col-md-3">
-                <label class="form-label">Miktar</label>
-                <InputNumber TValue="int" class="form-control" @bind-Value="model.Quantity" />
-            </div>
-
-            <div class="col-md-3">
-                <label class="form-label">Evrak No</label>
-                <InputText class="form-control" @bind-Value="model.DocumentNumber" />
-            </div>
-
-            <div class="col-md-6">
-                <label class="form-label">Açıklama</label>
-                <InputTextArea class="form-control" rows="2" @bind-Value="model.Description" />
+                <label class="form-label" for="toWh">Hedef Depo</label>
+                <InputSelect id="toWh" class="form-select"
+                             @key="model.ToLocationId"
+                             Value="model.ToWarehouseId"
+                             ValueChanged="@(async (int? val) => await OnToWarehouseChangedAsync(val))"
+                             ValueExpression="() => model.ToWarehouseId"
+                             disabled="@(!model.ToLocationId.HasValue)">
+                    <option value="">Seçiniz</option>
+                    @foreach (var w in toWarehouses)
+                    {
+                        <option value="@w.Id" disabled="@(w.Id == model.FromWarehouseId)">
+                            @($"{w.Code} - {w.Name}")
+                        </option>
+                    }
+                </InputSelect>
             </div>
         </div>
 
+        <!-- Evrak ve Açıklama -->
+        <div class="row g-3 mb-3">
+            <div class="col-md-4">
+                <label class="form-label" for="docNo">Evrak No</label>
+                <InputText id="docNo" class="form-control" @bind-Value="model.DocumentNumber" />
+            </div>
+            <div class="col-md-8">
+                <label class="form-label" for="desc">Açıklama</label>
+                <InputTextArea id="desc" class="form-control" rows="2" @bind-Value="model.Description" />
+            </div>
+        </div>
+
+        <hr />
+
+        <!-- Ürün Tablosu -->
+        <h5>Ürünler</h5>
+        <table class="table table-sm align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th style="width:35%">Ürün</th>
+                    <th style="width:15%" class="text-end">Miktar</th>
+                    <th style="width:10%">Birim</th>
+                    <th style="width:15%" class="text-end">Stok (Kaynak)</th>
+                    <th style="width:10%"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in model.Items)
+                {
+                    <tr>
+                        <td>
+                            <label class="visually-hidden" for="@($"prd-{item.GetHashCode()}")">Ürün</label>
+                            <InputSelect id="@($"prd-{item.GetHashCode()}")"
+                                         class="form-select"
+                                         TValue="int?"
+                                         Value="item.ProductId"
+                                         ValueChanged="@(async (int? val) => await OnProductChangedAsync(item, val))"
+                                         ValueExpression="() => item.ProductId">
+                                <option value="">Seçiniz</option>
+                                @foreach (var p in products)
+                                {
+                                    <option value="@p.Id">@p.Code - @p.Name</option>
+                                }
+                            </InputSelect>
+                        </td>
+                        <td>
+                            <InputNumber TValue="int" class="form-control text-end" @bind-Value="item.Quantity" />
+                        </td>
+                        <td>@item.Unit</td>
+                        <td class="text-end @(item.Quantity > item.AvailableQty && item.AvailableQty > 0 ? "text-danger fw-bold" : "")">
+                            @(item.AvailableQty > 0 ? item.AvailableQty.ToString() : "-")
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-danger" type="button" @onclick="() => RemoveItem(item)">
+                                <i class="bi bi-x-circle"></i>
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <button class="btn btn-outline-primary mb-3" type="button" @onclick="AddNewItem">
+            <i class="bi bi-plus-circle me-1"></i> Ürün Ekle
+        </button>
+
         <div class="mt-3">
-            <button class="btn btn-primary" type="submit">Transfer Et</button>
+            <button class="btn btn-primary" type="submit">
+                <i class="bi bi-arrow-left-right me-1"></i> Transfer Et
+            </button>
         </div>
     </EditForm>
 }
 
+
+
 @code {
     private List<Product> products = new();
+    private List<Location> locations = new();
     private List<Warehouse> warehouses = new();
-    private TransferModel model = new();
+
+    private List<Warehouse> fromWarehouses = new();
+    private List<Warehouse> toWarehouses = new();
+
+    private TransferForm model = new();
     private EditContext? editContext;
     private bool isLoading = true;
 
+    private string? errorMessage;
+    private string? successMessage;
+
     protected override async Task OnInitializedAsync()
     {
-        products = await _context.Products.OrderBy(p => p.Name).ToListAsync();
-        warehouses = await _context.Warehouses.OrderBy(w => w.Name).ToListAsync();
-        editContext = new EditContext(model);
-        isLoading = false;
+        try
+        {
+            await using var db = await ContextFactory.CreateDbContextAsync();
+
+            products = await db.Products
+                .AsNoTracking()
+                .OrderBy(p => p.Name)
+                .ToListAsync();
+
+            locations = await db.Locations
+                .AsNoTracking()
+                .OrderBy(l => l.Name)
+                .ToListAsync();
+
+            warehouses = await db.Warehouses
+                .AsNoTracking()
+                .OrderBy(w => w.Name)
+                .ToListAsync();
+
+            editContext = new EditContext(model);
+            isLoading = false;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Yükleme hatası: {ex.Message}";
+        }
     }
 
-    private async Task OnProductChanged(int? productId)
+    private void AddNewItem() => model.Items.Add(new TransferItem());
+    private void RemoveItem(TransferItem item) => model.Items.Remove(item);
+
+    private async Task OnFromLocationChangedAsync(int? newValue)
     {
-        model.ProductId = productId;
-        await Task.CompletedTask;
+        try
+        {
+            model.FromLocationId = newValue;
+            model.FromWarehouseId = null;
+
+            if (!newValue.HasValue)
+            {
+                fromWarehouses.Clear();
+            }
+            else
+            {
+                fromWarehouses = warehouses.Where(w => w.LocationId == newValue.Value)
+                                           .OrderBy(w => w.Code)
+                                           .ToList();
+            }
+
+            foreach (var item in model.Items)
+                item.AvailableQty = 0;
+
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            await ReportError("ERR-TRF-LOC-002", ex, "Kaynak lokasyona bağlı depolar yüklenemedi.");
+        }
+    }
+
+    private async Task OnToLocationChangedAsync(int? newValue)
+    {
+        try
+        {
+            model.ToLocationId = newValue;
+            model.ToWarehouseId = null;
+
+            if (!newValue.HasValue)
+            {
+                toWarehouses.Clear();
+            }
+            else
+            {
+                toWarehouses = warehouses.Where(w => w.LocationId == newValue.Value)
+                                         .OrderBy(w => w.Code)
+                                         .ToList();
+            }
+
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            await ReportError("ERR-TRF-LOC-004", ex, "Hedef lokasyona bağlı depolar yüklenemedi.");
+        }
+    }
+
+    private async Task OnFromWarehouseChangedAsync(int? newValue)
+    {
+        try
+        {
+            model.FromWarehouseId = newValue;
+
+            if (newValue.HasValue)
+            {
+                foreach (var item in model.Items)
+                    await LoadAvailableQty(item);
+            }
+            else
+            {
+                foreach (var item in model.Items)
+                    item.AvailableQty = 0;
+            }
+
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            await ReportError("ERR-TRF-WH-002", ex, "Kaynak depo seçimi işlenemedi.");
+        }
+    }
+
+    private async Task OnToWarehouseChangedAsync(int? newValue)
+    {
+        model.ToWarehouseId = newValue;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnProductChangedAsync(TransferItem item, int? newValue)
+    {
+        try
+        {
+            item.ProductId = newValue;
+            await LoadAvailableQty(item);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            await ReportError("ERR-TRF-PRD-001", ex, "Ürün seçimi işlenemedi.");
+        }
+    }
+
+    private async Task LoadAvailableQty(TransferItem item)
+    {
+        try
+        {
+            if (item.ProductId == null || model.FromWarehouseId == null)
+            {
+                item.Unit = "";
+                item.AvailableQty = 0;
+                return;
+            }
+
+            var product = products.FirstOrDefault(p => p.Id == item.ProductId);
+            item.Unit = product?.Unit.ToString() ?? "";
+
+            item.AvailableQty = await WarehouseService.GetAvailableQuantityAsync(
+                model.FromWarehouseId.Value, item.ProductId.Value);
+        }
+        catch (Exception ex)
+        {
+            await ReportError("ERR-TRF-STK-001", ex, "Stok miktarı sorgulanırken hata oluştu.");
+            item.AvailableQty = 0;
+        }
     }
 
     private async Task HandleValidSubmit()
     {
-        var userId = await UserContext.GetCurrentUserIdAsync();
-        if (string.IsNullOrEmpty(userId))
-            return;
+        errorMessage = successMessage = null;
 
-        await StockService.TransferAsync(model.ProductId!.Value, model.Quantity, model.FromWarehouseId!.Value, model.ToWarehouseId!.Value, userId, model.DocumentNumber, model.Description);
+        try
+        {
+            if (!model.FromWarehouseId.HasValue || !model.ToWarehouseId.HasValue)
+            {
+                errorMessage = "ERR-TRF-VAL-001: Kaynak ve hedef depo seçilmelidir.";
+                return;
+            }
+
+            var userId = await UserContext.GetCurrentUserIdAsync();
+            if (string.IsNullOrEmpty(userId))
+            {
+                errorMessage = "ERR-TRF-VAL-002: Kullanıcı bilgisi alınamadı.";
+                return;
+            }
+
+            // Stok kontrolleri
+            foreach (var item in model.Items)
+            {
+                if (item.ProductId == null || item.Quantity <= 0) continue;
+
+                int available = await WarehouseService.GetAvailableQuantityAsync(
+                    model.FromWarehouseId.Value, item.ProductId.Value);
+
+                if (available < item.Quantity)
+                {
+                    errorMessage = $"ERR-TRF-STK-002: '{products.FirstOrDefault(p => p.Id == item.ProductId)?.Name}' için yetersiz stok (mevcut={available}, istek={item.Quantity}).";
+                    return;
+                }
+            }
+
+            // Transfer
+            foreach (var item in model.Items)
+            {
+                if (item.ProductId is null || item.Quantity <= 0) continue;
+
+                await StockService.TransferAsync(
+                    item.ProductId.Value,
+                    item.Quantity,
+                    model.FromWarehouseId.Value,
+                    model.ToWarehouseId.Value,
+                    userId,
+                    model.DocumentNumber,
+                    model.Description);
+            }
+
+            successMessage = "Transfer başarıyla tamamlandı.";
+
+            model = new TransferForm();
+            editContext = new EditContext(model);
+            fromWarehouses.Clear();
+            toWarehouses.Clear();
+        }
+        catch (Exception ex)
+        {
+            await ReportError("ERR-TRF-SUBMIT-001", ex, "Transfer kaydı sırasında hata oluştu.");
+        }
     }
 
-    private class TransferModel
+    private async Task ReportError(string code, Exception ex, string? userMessage = null)
     {
-        public int? ProductId { get; set; }
+        var msg = $"{code}: {ex.Message}";
+        errorMessage = userMessage is null ? msg : $"{code}: {userMessage}";
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // === Modeller ===
+    private class TransferForm
+    {
+        public int? FromLocationId { get; set; }
         public int? FromWarehouseId { get; set; }
+        public int? ToLocationId { get; set; }
         public int? ToWarehouseId { get; set; }
-        public int Quantity { get; set; }
         public string DocumentNumber { get; set; } = string.Empty;
         public string? Description { get; set; }
+        public List<TransferItem> Items { get; set; } = new();
+    }
+
+    private class TransferItem
+    {
+        public int? ProductId { get; set; }
+        public int Quantity { get; set; }
+        public string Unit { get; set; } = "";
+        public int AvailableQty { get; set; }
     }
 }

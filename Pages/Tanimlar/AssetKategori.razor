@@ -1,0 +1,88 @@
+﻿@page "/tanimlar/assetkategori"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext _context
+
+<h3>Varlık Kategorileri</h3>
+
+<EditForm Model="model" OnValidSubmit="Save">
+    <DataAnnotationsValidator /><ValidationSummary />
+    <div class="row mb-2">
+        <div class="col"><InputText class="form-control" placeholder="Kategori Adı" @bind-Value="model.Name" /></div>
+        <div class="col"><InputText class="form-control" placeholder="Açıklama" @bind-Value="model.Description" /></div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-primary">@((model.Id == 0) ? "Ekle" : "Güncelle")</button>
+            @if (model.Id != 0)
+            {
+                <button type="button" class="btn btn-secondary" @onclick="CancelEdit">İptal</button>
+            }
+        </div>
+    </div>
+</EditForm>
+
+<hr />
+<button class="btn btn-info mb-2" @onclick="ToggleList">Listeyi Göster/Gizle</button>
+
+@if (showList)
+{
+    <table class="table table-striped">
+        <thead><tr><th>Ad</th><th>Açıklama</th><th>İşlemler</th></tr></thead>
+        <tbody>
+        @foreach (var item in list)
+        {
+            <tr>
+                <td>@item.Name</td>
+                <td>@item.Description</td>
+                <td>
+                    <button class="btn btn-sm btn-warning" @onclick="() => Edit(item)">Düzenle</button>
+                    <button class="btn btn-sm btn-danger" @onclick="() => Delete(item.Id)">Sil</button>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    private AssetCategory model = new();
+    private List<AssetCategory> list = new();
+    private bool showList;
+
+    private async Task ToggleList()
+    {
+        if (!showList)
+            list = await _context.AssetCategories.ToListAsync();
+        showList = !showList;
+    }
+
+    private async Task Save()
+    {
+        if (model.Id == 0)
+            _context.AssetCategories.Add(model);
+        else
+            _context.AssetCategories.Update(model);
+
+        await _context.SaveChangesAsync();
+        model = new();
+        list = await _context.AssetCategories.ToListAsync();
+        showList = true;
+    }
+
+    private void Edit(AssetCategory item) =>
+        model = new() { Id = item.Id, Name = item.Name, Description = item.Description };
+
+    private async Task Delete(int id)
+    {
+        var entity = await _context.AssetCategories.FindAsync(id);
+        if (entity != null)
+        {
+            _context.AssetCategories.Remove(entity);
+            await _context.SaveChangesAsync();
+            list = await _context.AssetCategories.ToListAsync();
+        }
+    }
+
+    private void CancelEdit() => model = new();
+}

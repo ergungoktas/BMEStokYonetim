@@ -32,6 +32,8 @@ namespace BMEStokYonetim.Data
         public DbSet<WarehouseStock> WarehouseStocks => Set<WarehouseStock>();
         public DbSet<Warehouse> Warehouses => Set<Warehouse>();
         public DbSet<StockReservation> StockReservations => Set<StockReservation>();
+        public DbSet<AssetDailyCheck> AssetDailyChecks { get; set; }
+        public DbSet<AssetResponsibility> AssetResponsibilities { get; set; }
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -88,6 +90,12 @@ namespace BMEStokYonetim.Data
                       .OnDelete(DeleteBehavior.Restrict);
             });
             #endregion
+            _ = builder.Entity<Warehouse>()
+            .HasOne(w => w.Location)
+            .WithMany(l => l.Warehouses)
+            .HasForeignKey(w => w.LocationId)
+            .OnDelete(DeleteBehavior.Restrict);
+
 
             #region StockMovement Configuration
             _ = builder.Entity<StockMovement>()
@@ -276,6 +284,11 @@ namespace BMEStokYonetim.Data
                       .OnDelete(DeleteBehavior.Restrict);
             });
             #endregion
+
+            _ = builder.Entity<AssetDailyCheck>()
+                .HasIndex(x => new { x.AssetId, x.UserId, x.CheckDate })
+                .IsUnique();
         }
     }
+
 }

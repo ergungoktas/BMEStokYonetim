@@ -78,7 +78,7 @@ else
             .Include(d => d.Product)
             .Include(d => d.Supplier)
             .Include(d => d.Purchase)
-            .Include(d => d.RequestItem)
+            .Include(d => d.RequestItem!)
                 .ThenInclude(r => r.TargetWarehouse)
             .Where(d => d.Status == TalepDurumu.PurchaseApproved)
             .OrderByDescending(d => d.Purchase.PurchaseDate)

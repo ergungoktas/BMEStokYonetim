@@ -1,0 +1,43 @@
+@page "/tanimlar/assetimport"
+@using Microsoft.AspNetCore.Components.Forms
+@using BMEStokYonetim.Services.Service
+@inject ExcelImportService ImportService
+
+<h3>Varlık Excel İçe Aktarımı</h3>
+
+<InputFile OnChange="OnFileChange" accept=".xlsx" />
+@if (!string.IsNullOrEmpty(fileName))
+{
+    <p class="mt-2">Seçilen dosya: <strong>@fileName</strong></p>
+}
+
+<button class="btn btn-primary mt-2" @onclick="StartImport" disabled="@(_file is null)">
+    İçe Aktar
+</button>
+
+@if (!string.IsNullOrEmpty(message))
+{
+    <div class="alert alert-info mt-3">@message</div>
+}
+
+@code {
+    private IBrowserFile? _file;
+    private string? fileName;
+    private string? message;
+
+    private void OnFileChange(InputFileChangeEventArgs e)
+    {
+        _file = e.File;
+        fileName = _file?.Name;
+        message = null;
+    }
+
+    private async Task StartImport()
+    {
+        if (_file is null) return;
+
+        // Açık tür ile al: CS8130 çözülür
+        (int catCount, int assetCount) result = await ImportService.ImportFromExcelAsync(_file);
+        message = $"{result.catCount} kategori, {result.assetCount} varlık eklendi.";
+    }
+}

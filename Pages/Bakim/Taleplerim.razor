@@ -1,0 +1,209 @@
+@page "/bakim/taleplerim"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Helpers
+@using BMEStokYonetim.Services.Iservice
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext _context
+@inject IUserContextService UserContext
+@inject NavigationManager Nav
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3><i class="bi bi-list-task"></i> Taleplerim</h3>
+        <button class="btn btn-danger" @onclick="@(() => Nav.NavigateTo("/bakim/talep-olustur"))">
+            <i class="bi bi-plus-circle me-2"></i>Yeni Talep Oluştur
+        </button>
+    </div>
+
+    @if (loading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else if (!myMaintenances.Any())
+    {
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-inbox display-1 text-muted"></i>
+                <h5 class="mt-3">Henüz talep oluşturmadınız</h5>
+                <p class="text-muted">Yeni bir bakım veya arıza talebi oluşturmak için yukarıdaki butona tıklayın.</p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- İstatistik Kartları -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card shadow-sm border-primary">
+                    <div class="card-body text-center">
+                        <i class="bi bi-hourglass-split display-4 text-primary"></i>
+                        <h6 class="mt-2 text-muted">Bekleyen</h6>
+                        <h3 class="mb-0">@myMaintenances.Count(m => m.Status == BakimDurumu.TalepOlusturuldu || m.Status == BakimDurumu.YoneticiOnayiBekliyor)</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card shadow-sm border-warning">
+                    <div class="card-body text-center">
+                        <i class="bi bi-gear-fill display-4 text-warning"></i>
+                        <h6 class="mt-2 text-muted">Devam Eden</h6>
+                        <h3 class="mb-0">@myMaintenances.Count(m => m.Status == BakimDurumu.BakimBasladi || m.Status == BakimDurumu.BakimDevamEdiyor)</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card shadow-sm border-success">
+                    <div class="card-body text-center">
+                        <i class="bi bi-check-circle-fill display-4 text-success"></i>
+                        <h6 class="mt-2 text-muted">Tamamlanan</h6>
+                        <h3 class="mb-0">@myMaintenances.Count(m => m.Status == BakimDurumu.BakimTamamlandi || m.Status == BakimDurumu.TeslimEdildi)</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card shadow-sm border-danger">
+                    <div class="card-body text-center">
+                        <i class="bi bi-x-circle-fill display-4 text-danger"></i>
+                        <h6 class="mt-2 text-muted">Reddedilen/İptal</h6>
+                        <h3 class="mb-0">@myMaintenances.Count(m => m.Status == BakimDurumu.YoneticiReddi || m.Status == BakimDurumu.IptalEdildi)</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Talepler Listesi -->
+        <div class="card shadow">
+            <div class="card-header bg-light">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Tüm Taleplerim</h5>
+                    <select class="form-select w-auto" @onchange="OnFilterChanged">
+                        <option value="">Tüm Durumlar</option>
+                        @foreach (BakimDurumu status in Enum.GetValues(typeof(BakimDurumu)))
+                        {
+                            <option value="@((int)status)">@status.GetDescription()</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Varlık</th>
+                                <th>Açıklama</th>
+                                <th>Talep Tarihi</th>
+                                <th>Durum</th>
+                                <th>Planlanan Tarih</th>
+                                <th>İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var m in filteredMaintenances.OrderByDescending(x => x.RequestDate))
+                            {
+                                <tr>
+                                    <td class="fw-bold">#@m.Id</td>
+                                    <td>
+                                        <div class="fw-semibold">@m.Asset?.Name</div>
+                                        @if (!string.IsNullOrEmpty(m.Asset?.PlateNumber))
+                                        {
+                                            <small class="text-muted">🚗 @m.Asset.PlateNumber</small>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="text-truncate" style="max-width: 300px;" title="@m.Description">
+                                            @m.Description
+                                        </div>
+                                    </td>
+                                    <td>@m.RequestDate.ToString("dd.MM.yyyy HH:mm")</td>
+                                    <td>
+                                        <span class="badge @GetStatusBadgeClass(m.Status)">
+                                            @m.Status.GetDescription()
+                                        </span>
+                                    </td>
+                                    <td>
+                                        @if (m.PlannedDate.HasValue)
+                                        {
+                                            <text>@m.PlannedDate.Value.ToString("dd.MM.yyyy")</text>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">Planlanmadı</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary" @onclick="@(() => Nav.NavigateTo($"/bakim/detay/{m.Id}"))">
+                                            <i class="bi bi-eye"></i> Detay
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Maintenance> myMaintenances = new();
+    private bool loading = true;
+    private BakimDurumu? selectedStatus;
+
+    private IEnumerable<Maintenance> filteredMaintenances =>
+        selectedStatus.HasValue
+            ? myMaintenances.Where(m => m.Status == selectedStatus)
+            : myMaintenances;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = await UserContext.GetCurrentUserIdAsync();
+
+        if (!string.IsNullOrEmpty(userId))
+        {
+            myMaintenances = await _context.Maintenances
+                .Include(m => m.Asset)
+                .Include(m => m.FaultCode)
+                .Where(m => m.CreatedByUserId == userId)
+                .OrderByDescending(m => m.RequestDate)
+                .ToListAsync();
+        }
+
+        loading = false;
+    }
+
+    private void OnFilterChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int statusValue))
+        {
+            selectedStatus = (BakimDurumu)statusValue;
+        }
+        else
+        {
+            selectedStatus = null;
+        }
+    }
+
+    private static string GetStatusBadgeClass(BakimDurumu status) => status switch
+    {
+        BakimDurumu.TalepOlusturuldu => "bg-secondary",
+        BakimDurumu.YoneticiOnayiBekliyor => "bg-info",
+        BakimDurumu.YoneticiReddi => "bg-danger",
+        BakimDurumu.BakimPlanlandi => "bg-primary",
+        BakimDurumu.EkipAtandi => "bg-primary",
+        BakimDurumu.BakimBasladi => "bg-warning text-dark",
+        BakimDurumu.ParcaBekleniyor => "bg-warning text-dark",
+        BakimDurumu.BakimDevamEdiyor => "bg-warning text-dark",
+        BakimDurumu.BakimTamamlandi => "bg-success",
+        BakimDurumu.TestEdiliyor => "bg-info",
+        BakimDurumu.TeslimEdildi => "bg-success",
+        BakimDurumu.YenidenAcildi => "bg-danger",
+        BakimDurumu.IptalEdildi => "bg-dark",
+        _ => "bg-secondary"
+    };
+}

@@ -1,0 +1,188 @@
+@page "/bakim/onay-bekleyenler"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Helpers
+@using BMEStokYonetim.Services.Iservice
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop
+@inject ApplicationDbContext _context
+@inject IMaintenanceService MaintenanceService
+@inject IUserContextService UserContext
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="container-fluid py-4">
+    <h3 class="mb-4"><i class="bi bi-clipboard-check"></i> Onay Bekleyen Bakım Talepleri</h3>
+
+    @if (loading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+        </div>
+    }
+    else if (!pendingMaintenances.Any())
+    {
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> Onay bekleyen talep bulunmamaktadır.
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            @foreach (var maintenance in pendingMaintenances.OrderBy(m => m.RequestDate))
+            {
+                <div class="col-lg-6 mb-3">
+                    <div class="card shadow-sm h-100 @GetPriorityBorderClass(maintenance.Description)">
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                            <span class="fw-bold">#@maintenance.Id - @maintenance.Asset?.Name</span>
+                            <span class="badge bg-warning text-dark">
+                                <i class="bi bi-clock-history"></i> Onay Bekliyor
+                            </span>
+                        </div>
+                        <div class="card-body">
+                            <!-- Varlık Bilgileri -->
+                            <div class="mb-3">
+                                <h6 class="text-primary"><i class="bi bi-truck"></i> Varlık Bilgileri</h6>
+                                <div class="ms-3">
+                                    <div><strong>Ad:</strong> @maintenance.Asset?.Name</div>
+                                    @if (!string.IsNullOrEmpty(maintenance.Asset?.PlateNumber))
+                                    {
+                                        <div><strong>Plaka:</strong> @maintenance.Asset.PlateNumber</div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(maintenance.Asset?.SerialNumber))
+                                    {
+                                        <div><strong>S/N:</strong> @maintenance.Asset.SerialNumber</div>
+                                    }
+                                    @if (maintenance.Asset?.CurrentKM.HasValue == true)
+                                    {
+                                        <div><strong>KM:</strong> @maintenance.Asset.CurrentKM.Value.ToString("N0")</div>
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Talep Bilgileri -->
+                            <div class="mb-3">
+                                <h6 class="text-success"><i class="bi bi-info-circle"></i> Talep Detayları</h6>
+                                <div class="ms-3">
+                                    <div><strong>Talep Tarihi:</strong> @maintenance.RequestDate.ToString("dd.MM.yyyy HH:mm")</div>
+                                    @if (maintenance.FaultCode != null)
+                                    {
+                                        <div>
+                                            <strong>Arıza Kodu:</strong>
+                                            <span class="badge bg-secondary">@maintenance.FaultCode.Code</span>
+                                            @maintenance.FaultCode.Name
+                                        </div>
+                                    }
+                                    @if (maintenance.PlannedDate.HasValue)
+                                    {
+                                        <div><strong>İstenilen Tarih:</strong> @maintenance.PlannedDate.Value.ToString("dd.MM.yyyy")</div>
+                                    }
+                                </div>
+                            </div>
+
+                            <!-- Açıklama -->
+                            <div class="mb-3">
+                                <h6 class="text-danger"><i class="bi bi-chat-left-text"></i> Arıza Açıklaması</h6>
+                                <div class="alert alert-light mb-0" style="max-height: 150px; overflow-y: auto;">
+                                    @maintenance.Description
+                                </div>
+                            </div>
+
+                            <!-- İstek Sahibi -->
+                            @if (maintenance.CreatedByUser != null)
+                            {
+                                <div class="mb-3">
+                                    <small class="text-muted">
+                                        <i class="bi bi-person"></i> Talep Eden: <strong>@maintenance.CreatedByUser.FullName</strong>
+                                    </small>
+                                </div>
+                            }
+                        </div>
+                        <div class="card-footer bg-white d-flex gap-2 justify-content-end">
+                            <button class="btn btn-success" @onclick="@(() => ApproveAsync(maintenance.Id))">
+                                <i class="bi bi-check-circle"></i> Onayla & Planla
+                            </button>
+                            <button class="btn btn-danger" @onclick="@(() => RejectAsync(maintenance.Id))">
+                                <i class="bi bi-x-circle"></i> Reddet
+                            </button>
+                            <button class="btn btn-outline-secondary" @onclick="@(() => Nav.NavigateTo($"/bakim/detay/{maintenance.Id}"))">
+                                <i class="bi bi-eye"></i> Detay
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<Maintenance> pendingMaintenances = new();
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPendingMaintenances();
+    }
+
+    private async Task LoadPendingMaintenances()
+    {
+        loading = true;
+
+        pendingMaintenances = await _context.Maintenances
+            .Include(m => m.Asset)
+            .Include(m => m.FaultCode)
+            .Include(m => m.CreatedByUser)
+            .Where(m => m.Status == BakimDurumu.TalepOlusturuldu || m.Status == BakimDurumu.YoneticiOnayiBekliyor)
+            .OrderBy(m => m.RequestDate)
+            .ToListAsync();
+
+        loading = false;
+    }
+
+    private async Task ApproveAsync(int maintenanceId)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Bu talebi onaylayıp planlama sayfasına gitmek istiyor musunuz?");
+        if (!confirmed) return;
+
+        var userId = await UserContext.GetCurrentUserIdAsync();
+        await MaintenanceService.UpdateStatusAsync(maintenanceId, BakimDurumu.BakimPlanlandi, userId ?? "");
+
+        Nav.NavigateTo($"/bakim/planlama/{maintenanceId}");
+    }
+
+    private async Task RejectAsync(int maintenanceId)
+    {
+        var reason = await JS.InvokeAsync<string>("prompt", "Red nedeni (opsiyonel):");
+
+        var userId = await UserContext.GetCurrentUserIdAsync();
+        await MaintenanceService.UpdateStatusAsync(maintenanceId, BakimDurumu.YoneticiReddi, userId ?? "");
+
+        if (!string.IsNullOrWhiteSpace(reason))
+        {
+            var maintenance = await _context.Maintenances.FindAsync(maintenanceId);
+            if (maintenance != null)
+            {
+                maintenance.WorkNotes = $"[YÖNETİCİ REDDİ] {reason}\n\n{maintenance.WorkNotes}";
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        await LoadPendingMaintenances();
+        await JS.InvokeVoidAsync("alert", "Talep reddedildi.");
+    }
+
+    private static string GetPriorityBorderClass(string description)
+    {
+        if (string.IsNullOrEmpty(description)) return "";
+
+        if (description.Contains("[Kritik]", StringComparison.OrdinalIgnoreCase))
+            return "border-danger border-3";
+        if (description.Contains("[Acil]", StringComparison.OrdinalIgnoreCase))
+            return "border-warning border-3";
+        if (description.Contains("[Yüksek]", StringComparison.OrdinalIgnoreCase))
+            return "border-primary border-2";
+
+        return "";
+    }
+}

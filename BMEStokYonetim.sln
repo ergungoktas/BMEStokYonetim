@@ -5,8 +5,6 @@ VisualStudioVersion = 17.14.36429.23
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BMEStokYonetim", "BMEStokYonetim.csproj", "{A7F12196-B268-7F83-045F-CD68AB96937A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BMEStokYonetim.Tests", "BMEStokYonetim.Tests\BMEStokYonetim.Tests.csproj", "{4F51C06D-59EB-41A2-8C37-F51F90BC3E40}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -14,13 +12,9 @@ Global
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{A7F12196-B268-7F83-045F-CD68AB96937A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-                {A7F12196-B268-7F83-045F-CD68AB96937A}.Debug|Any CPU.Build.0 = Debug|Any CPU
-                {A7F12196-B268-7F83-045F-CD68AB96937A}.Release|Any CPU.ActiveCfg = Release|Any CPU
-                {A7F12196-B268-7F83-045F-CD68AB96937A}.Release|Any CPU.Build.0 = Release|Any CPU
-                {4F51C06D-59EB-41A2-8C37-F51F90BC3E40}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-                {4F51C06D-59EB-41A2-8C37-F51F90BC3E40}.Debug|Any CPU.Build.0 = Debug|Any CPU
-                {4F51C06D-59EB-41A2-8C37-F51F90BC3E40}.Release|Any CPU.ActiveCfg = Release|Any CPU
-                {4F51C06D-59EB-41A2-8C37-F51F90BC3E40}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A7F12196-B268-7F83-045F-CD68AB96937A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A7F12196-B268-7F83-045F-CD68AB96937A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A7F12196-B268-7F83-045F-CD68AB96937A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

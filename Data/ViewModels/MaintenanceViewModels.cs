@@ -1,65 +1,133 @@
-using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace BMEStokYonetim.Data.ViewModels
 {
+    // ----------------------------
+    // 1️⃣ BAKIM FORM MODELİ
+    // ----------------------------
     public class MaintenanceFormModel
     {
-        [Required(ErrorMessage = "Varlık seçiniz")]
-        [Display(Name = "Varlık")]
+        [Required]
+        [Display(Name = "Varlık (Ekipman/Araç)")]
         public int AssetId { get; set; }
 
-        [Required(ErrorMessage = "Arıza kodu seçiniz")]
         [Display(Name = "Arıza Kodu")]
         public int? FaultCodeId { get; set; }
 
-        [Required(ErrorMessage = "Arıza açıklaması zorunludur")]
-        [MaxLength(500, ErrorMessage = "Açıklama 500 karakteri geçemez")]
-        [Display(Name = "Arıza Açıklaması")]
-        public string Description { get; set; } = string.Empty;
+        [Required]
+        [Display(Name = "Bakım Türü")]
+        public MaintenanceType MaintenanceType { get; set; }
 
         [Display(Name = "Talep Tarihi")]
-        public DateTime RequestDate { get; set; } = DateTime.UtcNow;
+        public DateTime? RequestDate { get; set; } = DateTime.Now;
 
         [Display(Name = "Planlanan Tarih")]
         public DateTime? PlannedDate { get; set; }
+
+        [Display(Name = "Başlama Tarihi")]
+        public DateTime? StartDate { get; set; }
+
+        [Display(Name = "Bitiş Tarihi")]
+        public DateTime? EndDate { get; set; }
+
+        [Display(Name = "Gerçekleşen KM / Saat")]
+        public int? ActualReading { get; set; }
+
+        [Display(Name = "Bakımı Yapan Kişi / Firma")]
+        [MaxLength(150)]
+        public string? PerformedBy { get; set; }
+
+        [Display(Name = "Açıklama")]
+        [MaxLength(1000)]
+        public string? Description { get; set; }
+
+        [Display(Name = "Toplam Maliyet")]
+        public decimal TotalCost { get; set; }
+
+        // Alt listeler
+        public List<MaintenancePartInputModel> Parts { get; set; } = [];
+        public List<MaintenancePersonnelInputModel> Personnel { get; set; } = [];
     }
 
+    // ----------------------------
+    // 2️⃣ BAKIM PARÇA MODELİ
+    // ----------------------------
     public class MaintenancePartInputModel
     {
-        [Required(ErrorMessage = "Ürün seçiniz")]
+        [Required]
         [Display(Name = "Ürün")]
-        public int? ProductId { get; set; }
+        public int ProductId { get; set; }
 
-        [Range(1, int.MaxValue, ErrorMessage = "Miktar 1 veya daha büyük olmalıdır")]
+        [Required]
         [Display(Name = "Miktar")]
-        public int Quantity { get; set; } = 1;
+        [Range(1, int.MaxValue, ErrorMessage = "Miktar 1 veya daha fazla olmalıdır.")]
+        public int Quantity { get; set; }
 
-        [Range(typeof(decimal), "0", "79228162514264337593543950335", ErrorMessage = "Birim maliyet 0 veya daha büyük olmalı")]
-        [Display(Name = "Birim Maliyet")]
+        [Display(Name = "Birim")]
+        public ProductUnit Unit { get; set; }
+
+        [Display(Name = "Birim Fiyatı (₺)")]
+        [Range(0, double.MaxValue, ErrorMessage = "Fiyat negatif olamaz.")]
         public decimal UnitCost { get; set; }
+
+        [Display(Name = "Toplam Tutar (₺)")]
+        public decimal TotalCost => UnitCost * Quantity;
+
+        [Display(Name = "Açıklama")]
+        [MaxLength(250)]
+        public string? Description { get; set; }
     }
 
+    // ----------------------------
+    // 3️⃣ BAKIM PERSONEL MODELİ
+    // ----------------------------
     public class MaintenancePersonnelInputModel
     {
-        [Required(ErrorMessage = "Personel adı zorunludur")]
-        [MaxLength(150)]
+        [Required]
         [Display(Name = "Personel Adı")]
+        [MaxLength(150)]
         public string PersonnelName { get; set; } = string.Empty;
 
+        [Display(Name = "Görev / Ünvan")]
         [MaxLength(100)]
-        [Display(Name = "Rol")]
         public string? Role { get; set; }
 
-        [Range(typeof(decimal), "0.25", "79228162514264337593543950335", ErrorMessage = "Çalışma saati 0.25 ve üzeri olmalı")]
-        [Display(Name = "Çalışma Saati")]
-        public decimal HoursWorked { get; set; } = 1;
+        [Display(Name = "Çalışma Süresi (saat)")]
+        [Range(0.1, 9999, ErrorMessage = "Süre 0'dan büyük olmalıdır.")]
+        public double HoursWorked { get; set; }
 
-        [Range(typeof(decimal), "0", "79228162514264337593543950335", ErrorMessage = "Saatlik ücret 0 veya üzeri olmalı")]
-        [Display(Name = "Saatlik Ücret")]
+        [Display(Name = "Saatlik Ücret (₺)")]
+        [Range(0, double.MaxValue, ErrorMessage = "Ücret negatif olamaz.")]
         public decimal HourlyRate { get; set; }
+
+        [Display(Name = "Toplam Ücret (₺)")]
+        public decimal TotalCost => (decimal)HoursWorked * HourlyRate;
+
+        [Display(Name = "Açıklama")]
+        [MaxLength(250)]
+        public string? Notes { get; set; }
     }
 
+    // ----------------------------
+    // 4️⃣ BAKIM LİSTE MODELİ
+    // ----------------------------
+    public class MaintenanceListViewModel
+    {
+        public int Id { get; set; }
+        public string AssetName { get; set; } = string.Empty;
+        public string? FaultCodeName { get; set; }
+        public MaintenanceType MaintenanceType { get; set; }
+        public string MaintenanceTypeName => MaintenanceType.ToString();
+        public string? Description { get; set; }
+        public DateTime StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public decimal? Cost { get; set; }
+        public bool IsCompleted => EndDate.HasValue;
+    }
+
+    // ----------------------------
+    // 5️⃣ ARIZA KODU MODELİ
+    // ----------------------------
     public class FaultCodeInputModel
     {
         [Required]
@@ -72,13 +140,58 @@ namespace BMEStokYonetim.Data.ViewModels
         [Display(Name = "Arıza Adı")]
         public string Name { get; set; } = string.Empty;
 
-        [Required]
-        [MaxLength(100)]
         [Display(Name = "Kategori")]
-        public string Category { get; set; } = string.Empty;
+        public FaultCategory? Category { get; set; }
 
         [MaxLength(500)]
         [Display(Name = "Açıklama")]
         public string? Description { get; set; }
+    }
+
+    // ----------------------------
+    // 6️⃣ ARIZA KODU LİSTE MODELİ
+    // ----------------------------
+    public class FaultCodeViewModel
+    {
+        public int Id { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public FaultCategory CategoryEnum { get; set; }
+        public string Category => CategoryEnum.ToString();
+        public string? Description { get; set; }
+        public bool IsActive { get; set; }
+    }
+
+    // ----------------------------
+    // 7️⃣ RAPOR MODELİ
+    // ----------------------------
+    public class MaintenanceReportViewModel
+    {
+        public int Id { get; set; }
+        public string AssetName { get; set; } = string.Empty;
+        public string? FaultName { get; set; }
+        public string? Description { get; set; }
+        public DateTime StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public decimal? Cost { get; set; }
+        public bool IsCompleted => EndDate.HasValue;
+    }
+
+    // ----------------------------
+    // 8️⃣ ENUM: BAKIM TÜRÜ
+    // ----------------------------
+    public enum MaintenanceType
+    {
+        [Display(Name = "Periyodik Bakım")]
+        Periodic = 1,
+
+        [Display(Name = "Arıza Onarımı")]
+        Repair = 2,
+
+        [Display(Name = "Kontrol / Denetim")]
+        Inspection = 3,
+
+        [Display(Name = "Diğer")]
+        Other = 4
     }
 }

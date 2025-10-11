@@ -1,0 +1,252 @@
+@page "/bakim/talep-olustur"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Helpers
+@using BMEStokYonetim.Services.Iservice
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop
+@inject IMaintenanceService MaintenanceService
+@inject IUserContextService UserContext
+@inject ApplicationDbContext _context
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card shadow">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0"><i class="bi bi-exclamation-triangle-fill me-2"></i>Bakım / Arıza Talebi Oluştur</h4>
+                </div>
+                <div class="card-body">
+                    @if (loading)
+                    {
+                        <div class="alert alert-info">Yükleniyor...</div>
+                    }
+                    else
+                    {
+                        <EditForm Model="maintenance" OnValidSubmit="SaveAsync">
+                            <DataAnnotationsValidator />
+                            <ValidationSummary class="alert alert-danger" />
+
+                            <div class="row g-3">
+                                <!-- Varlık Seçimi -->
+                                <div class="col-md-12">
+                                    <label class="form-label fw-bold">
+                                        <i class="bi bi-truck text-primary"></i> Arızalı Varlık (Araç/Makine)
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <InputSelect class="form-select form-select-lg" @bind-Value="maintenance.AssetId">
+                                        <option value="0">-- Varlık Seçiniz --</option>
+                                        @foreach (var asset in assets)
+                                        {
+                                            <option value="@asset.Id">
+                                                @asset.Name
+                                                @if (!string.IsNullOrEmpty(asset.PlateNumber))
+                                                {
+                                                    <text> - 🚗 @asset.PlateNumber</text>
+                                                }
+                                                @if (!string.IsNullOrEmpty(asset.SerialNumber))
+                                                {
+                                                    <text> (S/N: @asset.SerialNumber)</text>
+                                                }
+                                            </option>
+                                        }
+                                    </InputSelect>
+                                    @if (maintenance.AssetId == 0)
+                                    {
+                                        <small class="text-danger">⚠️ Lütfen arızalı varlığı seçiniz</small>
+                                    }
+                                </div>
+
+                                <!-- Arıza Kategorisi -->
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">
+                                        <i class="bi bi-tag text-warning"></i> Arıza Kategorisi
+                                    </label>
+                                    <InputSelect class="form-select" @bind-Value="selectedCategory">
+                                        <option value="">-- Kategori Seçiniz --</option>
+                                        @foreach (FaultCategory cat in Enum.GetValues(typeof(FaultCategory)))
+                                        {
+                                            <option value="@cat">@cat.GetDescription()</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+
+                                <!-- Arıza Kodu -->
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">
+                                        <i class="bi bi-code-square text-info"></i> Arıza Kodu (Opsiyonel)
+                                    </label>
+                                    <InputSelect class="form-select" @bind-Value="maintenance.FaultCodeId">
+                                        <option value="">-- Arıza Kodu Seçiniz --</option>
+                                        @foreach (var fc in filteredFaultCodes)
+                                        {
+                                            <option value="@fc.Id">[@fc.Code] @fc.Name</option>
+                                        }
+                                    </InputSelect>
+                                    @if (!filteredFaultCodes.Any() && !string.IsNullOrEmpty(selectedCategory))
+                                    {
+                                        <small class="text-muted">Bu kategoride arıza kodu bulunamadı</small>
+                                    }
+                                </div>
+
+                                <!-- Öncelik -->
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">
+                                        <i class="bi bi-flag-fill text-danger"></i> Öncelik Durumu
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <InputSelect class="form-select" @bind-Value="priority">
+                                        @foreach (BakimOncelik oncelik in Enum.GetValues(typeof(BakimOncelik)))
+                                        {
+                                            <option value="@oncelik">@oncelik.GetDescription()</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+
+                                <!-- Bakım Türü -->
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">
+                                        <i class="bi bi-gear-fill text-success"></i> Bakım Türü
+                                    </label>
+                                    <InputSelect class="form-select" @bind-Value="maintenanceType">
+                                        @foreach (BakimTuru tur in Enum.GetValues(typeof(BakimTuru)))
+                                        {
+                                            <option value="@tur">@tur.GetDescription()</option>
+                                        }
+                                    </InputSelect>
+                                </div>
+
+                                <!-- Arıza Açıklaması -->
+                                <div class="col-md-12">
+                                    <label class="form-label fw-bold">
+                                        <i class="bi bi-chat-left-text text-primary"></i> Arıza Açıklaması
+                                        <span class="text-danger">*</span>
+                                    </label>
+                                    <InputTextArea class="form-control" rows="5" @bind-Value="maintenance.Description"
+                                                   placeholder="Arızanın detaylı açıklaması&#10;- Ne zaman fark edildi?&#10;- Hangi belirtiler var?&#10;- Araç/makine çalışıyor mu?&#10;- Daha önce benzer sorun yaşandı mı?" />
+                                    <small class="text-muted">
+                                        <i class="bi bi-info-circle"></i> Arızayı olabildiğince detaylı açıklayın. Bu, bakım ekibinin daha hızlı çözüm bulmasına yardımcı olur.
+                                    </small>
+                                </div>
+
+                                <!-- Kilometre/Saat Bilgisi -->
+                                <div class="col-md-6">
+                                    <label class="form-label">
+                                        <i class="bi bi-speedometer2"></i> Güncel Kilometre
+                                    </label>
+                                    <InputNumber class="form-control" @bind-Value="currentKm" placeholder="0" />
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label">
+                                        <i class="bi bi-clock-history"></i> Çalışma Saati
+                                    </label>
+                                    <InputNumber class="form-control" @bind-Value="workingHours" placeholder="0" />
+                                </div>
+
+                                <!-- Talep Tarihi -->
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">
+                                        <i class="bi bi-calendar-event"></i> Talep Tarihi
+                                    </label>
+                                    <InputDate TValue="DateTime" class="form-control" @bind-Value="maintenance.RequestDate" readonly />
+                                </div>
+
+                                <!-- İstenilen Tamamlanma Tarihi -->
+                                <div class="col-md-6">
+                                    <label class="form-label">
+                                        <i class="bi bi-calendar-check"></i> İstenilen Tamamlanma Tarihi
+                                    </label>
+                                    <InputDate TValue="DateTime?" class="form-control" @bind-Value="maintenance.PlannedDate" />
+                                    <small class="text-muted">Acil durumlar için belirtin</small>
+                                </div>
+                            </div>
+
+                            <!-- Butonlar -->
+                            <div class="mt-4 d-flex gap-2 justify-content-end">
+                                <button type="button" class="btn btn-secondary" @onclick="GoBack">
+                                    <i class="bi bi-x-circle me-1"></i> İptal
+                                </button>
+                                <button class="btn btn-danger btn-lg" type="submit" disabled="@(maintenance.AssetId == 0 || string.IsNullOrWhiteSpace(maintenance.Description))">
+                                    <i class="bi bi-check-circle me-1"></i> Talebi Gönder
+                                </button>
+                            </div>
+                        </EditForm>
+                    }
+                </div>
+            </div>
+
+            <!-- Bilgilendirme Kartı -->
+            <div class="card mt-3 border-info">
+                <div class="card-body">
+                    <h6 class="text-info"><i class="bi bi-info-circle-fill"></i> Bilgilendirme</h6>
+                    <ul class="mb-0">
+                        <li>Talebiniz oluşturulduktan sonra bakım yöneticisi tarafından değerlendirilecektir.</li>
+                        <li>Acil durumlar için "Acil" veya "Kritik" öncelik seçiniz.</li>
+                        <li>Talep durumunuzu "Taleplerim" sayfasından takip edebilirsiniz.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private Maintenance maintenance = new();
+    private List<Asset> assets = new();
+    private List<FaultCode> allFaultCodes = new();
+    private bool loading = true;
+
+    private string selectedCategory = "";
+    private BakimOncelik priority = BakimOncelik.Normal;
+    private BakimTuru maintenanceType = BakimTuru.ArizaOnarimi;
+    private int? currentKm;
+    private int? workingHours;
+
+    private IEnumerable<FaultCode> filteredFaultCodes =>
+        string.IsNullOrEmpty(selectedCategory)
+            ? allFaultCodes
+            : allFaultCodes.Where(fc => fc.Category == selectedCategory);
+
+    protected override async Task OnInitializedAsync()
+    {
+        assets = await _context.Assets
+            .Where(a => a.IsActive)
+            .OrderBy(a => a.Name)
+            .ToListAsync();
+
+        allFaultCodes = await MaintenanceService.GetFaultCodesAsync(onlyActive: true);
+
+        maintenance.Status = BakimDurumu.TalepOlusturuldu;
+        maintenance.RequestDate = DateTime.Now;
+        maintenance.AssetId = 0;
+
+        loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (maintenance.AssetId == 0 || string.IsNullOrWhiteSpace(maintenance.Description))
+            return;
+
+        var userId = await UserContext.GetCurrentUserIdAsync();
+
+        // Öncelik ve türü açıklamaya ekle (enum desteklenmiyorsa)
+        maintenance.Description = $"[{priority.GetDescription()}] [{maintenanceType.GetDescription()}]\n\n{maintenance.Description}";
+
+        if (currentKm.HasValue || workingHours.HasValue)
+        {
+            maintenance.Description += $"\n\nKM: {currentKm ?? 0} | Çalışma Saati: {workingHours ?? 0}";
+        }
+
+        await MaintenanceService.CreateMaintenanceAsync(maintenance, userId ?? "");
+
+        await JS.InvokeVoidAsync("alert", "Talebiniz başarıyla oluşturuldu! Bakım yöneticisi en kısa sürede değerlendirecektir.");
+        Nav.NavigateTo("/bakim/taleplerim");
+    }
+
+    private void GoBack() => Nav.NavigateTo("/bakim");
+}

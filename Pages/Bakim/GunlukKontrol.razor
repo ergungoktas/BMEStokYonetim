@@ -1,0 +1,261 @@
+@page "/bakim/gunluk-kontrol"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext _context
+@inject IUserContextService UserContext
+@inject NavigationManager Nav
+
+<h3 class="mb-3">Günlük Araç / Makine Kontrol Formu</h3>
+
+@if (loading)
+{
+    <div class="alert alert-info">Yükleniyor...</div>
+}
+else
+{
+    <EditForm Model="@model" OnValidSubmit="@SaveAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="row g-3 mb-3">
+            <div class="col-md-3">
+                <label class="form-label">Tarih</label>
+                <InputDate TValue="DateTime" class="form-control"
+                           @bind-Value="CheckDateAsDateTime" />
+            </div>
+
+            <div class="col-md-5">
+                <label class="form-label">Varlık</label>
+                <InputSelect class="form-select" @bind-Value="model.AssetId">
+                    <option value="">-- Seçiniz --</option>
+                    @foreach (var a in assets)
+                    {
+                        <option value="@a.Id">@a.Name @((!string.IsNullOrEmpty(a.PlateNumber)) ? $"({a.PlateNumber})" : "")</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">KM</label>
+                <InputNumber class="form-control" @bind-Value="model.Km" />
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">Saat</label>
+                <InputNumber class="form-control" @bind-Value="model.HourMeter" />
+            </div>
+        </div>
+
+        <h5 class="mt-4 mb-2">Kontroller</h5>
+        <table class="table table-sm table-bordered align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Kontrol Noktası</th>
+                    <th style="width:90px" class="text-center">Durum</th>
+                    <th>Açıklama</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < checkFields.Count; i++)
+                {
+                    var index = i;
+                    var field = checkFields[index];
+                    <tr>
+                        <td>@field.Label</td>
+                        <td class="text-center">
+                            <input type="checkbox" class="form-check-input"
+                                   checked="@(field.GetValue())"
+                                   @onchange="@(e => field.SetValue((bool)(e.Value ?? false)))" />
+                        </td>
+                        <td>
+                            <input type="text" class="form-control"
+                                   value="@field.GetNote()"
+                                   @oninput="@(e => field.SetNote(e.Value?.ToString()))" />
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <div class="mt-3">
+            <label class="form-label">Arıza Durumu</label>
+            <div class="form-check">
+                <input type="checkbox" class="form-check-input" id="hasFault"
+                       checked="@(model.HasFault ?? false)"
+                       @onchange="@(e => model.HasFault = (bool)(e.Value ?? false))" />
+                <label class="form-check-label" for="hasFault">Arıza mevcut</label>
+            </div>
+
+            @if (model.HasFault == true)
+            {
+                <InputTextArea class="form-control mt-2" rows="2" @bind-Value="model.FaultDescription" />
+            }
+        </div>
+
+        <div class="row g-3 mt-3">
+            <div class="col-md-6">
+                <label class="form-label">Fotoğraf (isteğe bağlı)</label>
+                <InputFile OnChange="OnFileSelected" />
+                @if (!string.IsNullOrEmpty(model.PhotoPath))
+                {
+                    <div class="mt-2">
+                        <img src="@model.PhotoPath" style="max-width:200px;border:1px solid #ccc;" />
+                    </div>
+                }
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Genel Notlar</label>
+                <InputTextArea class="form-control" rows="3" @bind-Value="model.GeneralNotes" />
+            </div>
+        </div>
+
+        <div class="mt-4 text-end">
+            <button class="btn btn-success" type="submit"><i class="bi bi-save me-2"></i>Kaydet</button>
+            <button type="button" class="btn btn-secondary ms-2" @onclick="GoBack">
+                <i class="bi bi-arrow-left"></i> Geri
+            </button>
+        </div>
+    </EditForm>
+}
+
+@code {
+    private AssetDailyCheck model = new();
+    private List<Asset> assets = new();
+    private bool loading = true;
+
+    // 🔹 DateOnly ↔ DateTime köprüsü
+    private DateTime CheckDateAsDateTime
+    {
+        get => model.CheckDate.ToDateTime(TimeOnly.MinValue);
+        set => model.CheckDate = DateOnly.FromDateTime(value);
+    }
+
+    // 🔹 Kontrol alanları için wrapper class
+    private class CheckField
+    {
+        public string Label { get; set; } = string.Empty;
+        public Func<bool> GetValue { get; set; } = () => false;
+        public Action<bool> SetValue { get; set; } = _ => { };
+        public Func<string?> GetNote { get; set; } = () => null;
+        public Action<string?> SetNote { get; set; } = _ => { };
+    }
+
+    private List<CheckField> checkFields = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = await UserContext.GetCurrentUserIdAsync();
+        model.UserId = userId ?? string.Empty;
+
+        assets = await _context.Assets
+            .Where(a => a.IsActive)
+            .OrderBy(a => a.Name)
+            .ToListAsync();
+
+        checkFields = new()
+        {
+            new CheckField
+            {
+                Label = "Motor Yağı",
+                GetValue = () => model.EngineOilOk ?? false,
+                SetValue = v => model.EngineOilOk = v,
+                GetNote = () => model.EngineOilNotes,
+                SetNote = v => model.EngineOilNotes = v
+            },
+            new CheckField
+            {
+                Label = "Hidrolik Yağı",
+                GetValue = () => model.HydraulicOilOk ?? false,
+                SetValue = v => model.HydraulicOilOk = v,
+                GetNote = () => model.HydraulicOilNotes,
+                SetNote = v => model.HydraulicOilNotes = v
+            },
+            new CheckField
+            {
+                Label = "Soğutma Suyu",
+                GetValue = () => model.CoolantOk ?? false,
+                SetValue = v => model.CoolantOk = v,
+                GetNote = () => model.CoolantNotes,
+                SetNote = v => model.CoolantNotes = v
+            },
+            new CheckField
+            {
+                Label = "Lastik Durumu",
+                GetValue = () => model.TireConditionOk ?? false,
+                SetValue = v => model.TireConditionOk = v,
+                GetNote = () => model.TireNotes,
+                SetNote = v => model.TireNotes = v
+            },
+            new CheckField
+            {
+                Label = "Farlar",
+                GetValue = () => model.LightsOk ?? false,
+                SetValue = v => model.LightsOk = v,
+                GetNote = () => model.LightsNotes,
+                SetNote = v => model.LightsNotes = v
+            },
+            new CheckField
+            {
+                Label = "Korna",
+                GetValue = () => model.HornOk ?? false,
+                SetValue = v => model.HornOk = v,
+                GetNote = () => model.HornNotes,
+                SetNote = v => model.HornNotes = v
+            },
+            new CheckField
+            {
+                Label = "Güvenlik Donanımı",
+                GetValue = () => model.SafetyEquipmentsOk ?? false,
+                SetValue = v => model.SafetyEquipmentsOk = v,
+                GetNote = () => model.SafetyEquipmentsNotes,
+                SetNote = v => model.SafetyEquipmentsNotes = v
+            }
+        };
+
+        loading = false;
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        var folder = Path.Combine("wwwroot", "uploads", "dailychecks");
+        Directory.CreateDirectory(folder);
+
+        var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.Name)}";
+        var filePath = Path.Combine(folder, fileName);
+
+        await using var stream = File.Create(filePath);
+        await file.OpenReadStream(maxAllowedSize: 10_000_000).CopyToAsync(stream);
+
+        model.PhotoPath = $"/uploads/dailychecks/{fileName}";
+    }
+
+    private async Task SaveAsync()
+    {
+        if (model.AssetId == 0)
+            return;
+
+        var existing = await _context.AssetDailyChecks
+            .FirstOrDefaultAsync(x => x.AssetId == model.AssetId && x.CheckDate == model.CheckDate);
+
+        if (existing != null)
+        {
+            _context.Entry(existing).CurrentValues.SetValues(model);
+            existing.UpdatedAt = DateTime.Now;
+        }
+        else
+        {
+            model.CreatedAt = DateTime.Now;
+            _context.AssetDailyChecks.Add(model);
+        }
+
+        await _context.SaveChangesAsync();
+        Nav.NavigateTo("/bakim");
+    }
+
+    private void GoBack() => Nav.NavigateTo("/bakim");
+}

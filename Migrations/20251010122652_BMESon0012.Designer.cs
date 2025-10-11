@@ -4,6 +4,7 @@ using BMEStokYonetim.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BMEStokYonetim.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251010122652_BMESon0012")]
+    partial class BMESon0012
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,36 +24,6 @@ namespace BMEStokYonetim.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
-
-            modelBuilder.Entity("AssetResponsibility", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AssetId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("AssignedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssetId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("AssetResponsibilities");
-                });
 
             modelBuilder.Entity("BMEStokYonetim.Data.Entities.ApplicationUser", b =>
                 {
@@ -152,8 +125,10 @@ namespace BMEStokYonetim.Migrations
                     b.Property<DateTime?>("LastMaintenanceDate")
                         .HasColumnType("datetime2");
 
-                    b.Property<int?>("LocationId")
-                        .HasColumnType("int");
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<int?>("MaintenanceInterval")
                         .HasColumnType("int");
@@ -185,8 +160,6 @@ namespace BMEStokYonetim.Migrations
 
                     b.HasIndex("CategoryId");
 
-                    b.HasIndex("LocationId");
-
                     b.ToTable("Assets");
                 });
 
@@ -216,110 +189,6 @@ namespace BMEStokYonetim.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("AssetCategories");
-                });
-
-            modelBuilder.Entity("BMEStokYonetim.Data.Entities.AssetDailyCheck", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AssetId")
-                        .HasColumnType("int");
-
-                    b.Property<DateOnly>("CheckDate")
-                        .HasColumnType("date");
-
-                    b.Property<string>("CoolantNotes")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
-
-                    b.Property<bool?>("CoolantOk")
-                        .HasColumnType("bit");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("EngineOilNotes")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
-
-                    b.Property<bool?>("EngineOilOk")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("FaultDescription")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("GeneralNotes")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<bool?>("HasFault")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("HornNotes")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
-
-                    b.Property<bool?>("HornOk")
-                        .HasColumnType("bit");
-
-                    b.Property<int?>("HourMeter")
-                        .HasColumnType("int");
-
-                    b.Property<string>("HydraulicOilNotes")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
-
-                    b.Property<bool?>("HydraulicOilOk")
-                        .HasColumnType("bit");
-
-                    b.Property<int?>("Km")
-                        .HasColumnType("int");
-
-                    b.Property<string>("LightsNotes")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
-
-                    b.Property<bool?>("LightsOk")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("PhotoPath")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)");
-
-                    b.Property<string>("SafetyEquipmentsNotes")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
-
-                    b.Property<bool?>("SafetyEquipmentsOk")
-                        .HasColumnType("bit");
-
-                    b.Property<bool?>("TireConditionOk")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("TireNotes")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("AssetId", "UserId", "CheckDate")
-                        .IsUnique();
-
-                    b.ToTable("AssetDailyChecks");
                 });
 
             modelBuilder.Entity("BMEStokYonetim.Data.Entities.AssetExternalRepair", b =>
@@ -420,9 +289,6 @@ namespace BMEStokYonetim.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<int>("CategoryEnum")
-                        .HasColumnType("int");
-
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -459,6 +325,9 @@ namespace BMEStokYonetim.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)");
+
+                    b.Property<bool>("IsMainDepot")
+                        .HasColumnType("bit");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -1339,25 +1208,6 @@ namespace BMEStokYonetim.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
-            modelBuilder.Entity("AssetResponsibility", b =>
-                {
-                    b.HasOne("BMEStokYonetim.Data.Entities.Asset", "Asset")
-                        .WithMany()
-                        .HasForeignKey("AssetId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("BMEStokYonetim.Data.Entities.ApplicationUser", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Asset");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("BMEStokYonetim.Data.Entities.Asset", b =>
                 {
                     b.HasOne("BMEStokYonetim.Data.Entities.AssetCategory", "Category")
@@ -1366,32 +1216,7 @@ namespace BMEStokYonetim.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("BMEStokYonetim.Data.Entities.Location", "Location")
-                        .WithMany()
-                        .HasForeignKey("LocationId");
-
                     b.Navigation("Category");
-
-                    b.Navigation("Location");
-                });
-
-            modelBuilder.Entity("BMEStokYonetim.Data.Entities.AssetDailyCheck", b =>
-                {
-                    b.HasOne("BMEStokYonetim.Data.Entities.Asset", "Asset")
-                        .WithMany()
-                        .HasForeignKey("AssetId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("BMEStokYonetim.Data.Entities.ApplicationUser", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Asset");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("BMEStokYonetim.Data.Entities.AssetExternalRepair", b =>
@@ -1766,8 +1591,7 @@ namespace BMEStokYonetim.Migrations
                 {
                     b.HasOne("BMEStokYonetim.Data.Entities.Location", "Location")
                         .WithMany("Warehouses")
-                        .HasForeignKey("LocationId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                        .HasForeignKey("LocationId");
 
                     b.Navigation("Location");
                 });

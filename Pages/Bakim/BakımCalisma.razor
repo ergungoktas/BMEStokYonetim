@@ -1,0 +1,383 @@
+@page "/bakim/calisma/{Id:int}"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using BMEStokYonetim.Helpers
+@using BMEStokYonetim.Services.Iservice
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.JSInterop
+@inject ApplicationDbContext _context
+@inject IMaintenanceService MaintenanceService
+@inject IUserContextService UserContext
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="container-fluid py-4">
+    @if (loading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary"></div>
+        </div>
+    }
+    else if (maintenance == null)
+    {
+        <div class="alert alert-danger">Bakım kaydı bulunamadı!</div>
+    }
+    else
+    {
+        <div class="row">
+            <!-- Sol Kolon - Form -->
+            <div class="col-lg-8">
+                <div class="card shadow">
+                    <div class="card-header bg-warning">
+                        <h4 class="mb-0"><i class="bi bi-tools"></i> Bakım Çalışması - #@maintenance.Id</h4>
+                    </div>
+                    <div class="card-body">
+                        <EditForm Model="maintenance" OnValidSubmit="SaveWorkAsync">
+                            <!-- Varlık Bilgisi -->
+                            <div class="alert alert-light mb-3">
+                                <h5><i class="bi bi-truck"></i> @maintenance.Asset?.Name</h5>
+                                <div class="row small">
+                                    <div class="col-6"><strong>Plaka:</strong> @(maintenance.Asset?.PlateNumber ?? "Yok")</div>
+                                    <div class="col-6"><strong>S/N:</strong> @(maintenance.Asset?.SerialNumber ?? "Yok")</div>
+                                </div>
+                            </div>
+
+                            <!-- Durum Güncelleme -->
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">
+                                        <i class="bi bi-flag-fill"></i> Bakım Durumu
+                                    </label>
+                                    <InputSelect class="form-select form-select-lg" @bind-Value="maintenance.Status">
+                                        <option value="@BakimDurumu.BakimBasladi">Bakım Başladı</option>
+                                        <option value="@BakimDurumu.BakimDevamEdiyor">Bakım Devam Ediyor</option>
+                                        <option value="@BakimDurumu.ParcaBekleniyor">Parça Bekleniyor</option>
+                                        <option value="@BakimDurumu.TestEdiliyor">Test Ediliyor</option>
+                                        <option value="@BakimDurumu.BakimTamamlandi">Bakım Tamamlandı</option>
+                                    </InputSelect>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold">
+                                        <i class="bi bi-calendar-event"></i> Başlama Zamanı
+                                    </label>
+                                    <InputDate TValue="DateTime?" class="form-control" @bind-Value="maintenance.StartDate" />
+                                </div>
+                            </div>
+
+                            <!-- Yapılan İşlemler -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-journal-text"></i> Yapılan İşlemler / Gözlemler
+                                </label>
+                                <InputTextArea class="form-control" rows="6" @bind-Value="maintenance.WorkNotes"
+                                               placeholder="Bakım sırasında yapılan tüm işlemleri, gözlemleri ve bulguları detaylı olarak yazınız...&#10;&#10;Örnek:&#10;- Motor yağı değiştirildi&#10;- Fren balataları kontrol edildi, %40 aşınma tespit edildi&#10;- Hidrolik sızıntı giderildi" />
+                            </div>
+
+                            <!-- Kullanılan Parçalar -->
+                            <div class="mb-3">
+                                <h6><i class="bi bi-box-seam"></i> Kullanılan Parçalar</h6>
+                                <div class="card">
+                                    <div class="card-body">
+                                        @if (!parts.Any())
+                                        {
+                                            <p class="text-muted mb-2">Henüz parça eklenmedi.</p>
+                                        }
+                                        else
+                                        {
+                                            <table class="table table-sm mb-2">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Ürün</th>
+                                                        <th style="width:100px">Miktar</th>
+                                                        <th style="width:120px">Birim Fiyat</th>
+                                                        <th style="width:120px">Toplam</th>
+                                                        <th style="width:50px"></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var part in parts)
+                                                    {
+                                                        <tr>
+                                                            <td>
+                                                                <InputSelect class="form-select form-select-sm" @bind-Value="part.ProductId">
+                                                                    <option value="0">-- Ürün Seçiniz --</option>
+                                                                    @foreach (var product in products)
+                                                                    {
+                                                                        <option value="@product.Id">@product.Name (@product.StockCode)</option>
+                                                                    }
+                                                                </InputSelect>
+                                                            </td>
+                                                            <td>
+                                                                <InputNumber TValue="int" class="form-control form-control-sm" @bind-Value="part.Quantity" />
+                                                            </td>
+                                                            <td>
+                                                                <InputNumber TValue="decimal" class="form-control form-control-sm" @bind-Value="part.UnitCost" step="0.01" />
+                                                            </td>
+                                                            <td>
+                                                                <strong>@part.TotalCost.ToString("N2") ₺</strong>
+                                                            </td>
+                                                            <td>
+                                                                <button type="button" class="btn btn-sm btn-outline-danger" @onclick="@(() => parts.Remove(part))">
+                                                                    <i class="bi bi-x"></i>
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        }
+                                        <button type="button" class="btn btn-sm btn-outline-primary" @onclick="AddPart">
+                                            <i class="bi bi-plus-circle"></i> Parça Ekle
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Çalışan Personel -->
+                            <div class="mb-3">
+                                <h6><i class="bi bi-people-fill"></i> Çalışan Personel & Süreler</h6>
+                                <div class="card">
+                                    <div class="card-body">
+                                        @if (!personnel.Any())
+                                        {
+                                            <p class="text-muted mb-2">Personel bilgisi yok.</p>
+                                        }
+                                        else
+                                        {
+                                            <table class="table table-sm mb-0">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Personel</th>
+                                                        <th>Rol</th>
+                                                        <th style="width:100px">Çalışma Saati</th>
+                                                        <th style="width:120px">Toplam Maliyet</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var p in personnel)
+                                                    {
+                                                        <tr>
+                                                            <td>@p.PersonnelName</td>
+                                                            <td>@(p.Role ?? "-")</td>
+                                                            <td>
+                                                                <InputNumber TValue="decimal" class="form-control form-control-sm" @bind-Value="p.HoursWorked" step="0.5" />
+                                                            </td>
+                                                            <td>
+                                                                <strong>@p.TotalCost.ToString("N2") ₺</strong>
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Butonlar -->
+                            <div class="d-flex gap-2 justify-content-end">
+                                <button type="button" class="btn btn-secondary" @onclick="@(() => Nav.NavigateTo("/bakim/gorevlerim"))">
+                                    <i class="bi bi-arrow-left"></i> Geri
+                                </button>
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="bi bi-floppy"></i> Değişiklikleri Kaydet
+                                </button>
+                                @if (maintenance.Status == BakimDurumu.BakimTamamlandi)
+                                {
+                                    <button type="button" class="btn btn-success btn-lg" @onclick="CompleteMaintenanceAsync">
+                                        <i class="bi bi-check-circle-fill"></i> Bakımı Tamamla
+                                    </button>
+                                }
+                            </div>
+                        </EditForm>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sağ Kolon - Bilgiler -->
+            <div class="col-lg-4">
+                <!-- Arıza Detayı -->
+                <div class="card shadow mb-3">
+                    <div class="card-header bg-danger text-white">
+                        <h6 class="mb-0"><i class="bi bi-exclamation-triangle-fill"></i> Arıza Detayı</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="small">@maintenance.Description</p>
+                        @if (maintenance.FaultCode != null)
+                        {
+                            <div class="mt-2">
+                                <span class="badge bg-secondary">@maintenance.FaultCode.Code</span>
+                                <div class="small mt-1">@maintenance.FaultCode.Name</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Maliyet Özeti -->
+                <div class="card shadow mb-3">
+                    <div class="card-header bg-primary text-white">
+                        <h6 class="mb-0"><i class="bi bi-cash-coin"></i> Maliyet Özeti</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>İşçilik:</span>
+                            <strong>@personnel.Sum(p => p.TotalCost).ToString("N2") ₺</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Parça:</span>
+                            <strong>@parts.Sum(p => p.TotalCost).ToString("N2") ₺</strong>
+                        </div>
+                        <hr />
+                        <div class="d-flex justify-content-between">
+                            <strong>TOPLAM:</strong>
+                            <strong class="text-primary fs-5">@((personnel.Sum(p => p.TotalCost) + parts.Sum(p => p.TotalCost)).ToString("N2")) ₺</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Zaman Çizelgesi -->
+                <div class="card shadow">
+                    <div class="card-header bg-info text-white">
+                        <h6 class="mb-0"><i class="bi bi-clock-history"></i> Zaman Çizelgesi</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="small">
+                            <div class="mb-2">
+                                <strong>Talep:</strong> @maintenance.RequestDate.ToString("dd.MM.yyyy HH:mm")
+                            </div>
+                            @if (maintenance.PlannedDate.HasValue)
+                            {
+                                <div class="mb-2">
+                                    <strong>Planlanan:</strong> @maintenance.PlannedDate.Value.ToString("dd.MM.yyyy")
+                                </div>
+                            }
+                            @if (maintenance.StartDate.HasValue)
+                            {
+                                <div class="mb-2">
+                                    <strong>Başlama:</strong> @maintenance.StartDate.Value.ToString("dd.MM.yyyy HH:mm")
+                                </div>
+                            }
+                            @if (maintenance.EndDate.HasValue)
+                            {
+                                <div class="mb-2">
+                                    <strong>Bitiş:</strong> @maintenance.EndDate.Value.ToString("dd.MM.yyyy HH:mm")
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Maintenance? maintenance;
+    private List<MaintenancePart> parts = [];
+    private List<MaintenancePersonnel> personnel = [];
+    private List<Product> products = [];
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        maintenance = await MaintenanceService.GetMaintenanceAsync(Id);
+
+        if (maintenance != null)
+        {
+            parts = maintenance.Parts.ToList();
+            personnel = maintenance.Personnels.ToList();
+
+            // Başlama zamanını otomatik ayarla
+            if (maintenance.Status == BakimDurumu.BakimBasladi && !maintenance.StartDate.HasValue)
+            {
+                maintenance.StartDate = DateTime.Now;
+            }
+        }
+
+        products = await _context.Products
+            .Where(p => p.IsActive)
+            .OrderBy(p => p.Name)
+            .ToListAsync();
+
+        loading = false;
+    }
+
+    private void AddPart()
+    {
+        parts.Add(new MaintenancePart
+        {
+            MaintenanceId = Id,
+            ProductId = 0,
+            Quantity = 1,
+            UnitCost = 0m
+        });
+    }
+
+    private async Task SaveWorkAsync()
+    {
+        if (maintenance == null) return;
+
+        // Parçaları kaydet
+        var existingPartIds = maintenance.Parts.Select(p => p.Id).ToList();
+        var currentPartIds = parts.Where(p => p.Id > 0).Select(p => p.Id).ToList();
+
+        // Silinenleri kaldır
+        foreach (var removedId in existingPartIds.Except(currentPartIds))
+        {
+            await MaintenanceService.RemovePartAsync(removedId);
+        }
+
+        // Yenileri ekle
+        foreach (var part in parts.Where(p => p.Id == 0 && p.ProductId > 0))
+        {
+            await MaintenanceService.AddPartAsync(Id, part.ProductId, part.Quantity, part.UnitCost);
+        }
+
+        // Personel çalışma saatlerini güncelle
+        foreach (var p in personnel.Where(p => p.Id > 0))
+        {
+            var entity = await _context.MaintenancePersonnels.FindAsync(p.Id);
+            if (entity != null)
+            {
+                entity.HoursWorked = p.HoursWorked;
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        // Bakım bilgilerini güncelle
+        var userId = await UserContext.GetCurrentUserIdAsync();
+        await MaintenanceService.UpdateWorkInfoAsync(Id, maintenance.WorkNotes);
+        await MaintenanceService.UpdateStatusAsync(Id, maintenance.Status, userId ?? "");
+
+        // Başlama zamanını kaydet
+        var maintenanceEntity = await _context.Maintenances.FindAsync(Id);
+        if (maintenanceEntity != null)
+        {
+            maintenanceEntity.StartDate = maintenance.StartDate;
+            await _context.SaveChangesAsync();
+        }
+
+        await JS.InvokeVoidAsync("alert", "Değişiklikler kaydedildi!");
+        StateHasChanged();
+    }
+
+    private async Task CompleteMaintenanceAsync()
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", "Bakımı tamamlamak istediğinizden emin misiniz? Bu işlem geri alınamaz.");
+        if (!confirmed) return;
+
+        if (maintenance == null) return;
+
+        maintenance.Status = BakimDurumu.BakimTamamlandi;
+        maintenance.EndDate = DateTime.Now;
+
+        await SaveWorkAsync();
+
+        await JS.InvokeVoidAsync("alert", "Bakım başarıyla tamamlandı!");
+        Nav.NavigateTo("/bakim/gorevlerim");
+    }
+}

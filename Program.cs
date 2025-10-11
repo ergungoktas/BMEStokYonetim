@@ -32,7 +32,7 @@ builder.Services.AddHttpContextAccessor();
 string keyPath = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
     "BMEStokYonetim_Keys");
-
+builder.Services.AddScoped<ExcelImportService>(); // ✅ Bu satırı ekle
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(keyPath))
     .SetApplicationName("BMEStokYonetim");
@@ -49,6 +49,8 @@ builder.Services.AddScoped<IMaintenanceService, MaintenanceService>();
 builder.Services.AddScoped<IRequestService, RequestService>();
 builder.Services.AddScoped<IPurchaseService, PurchaseService>();
 builder.Services.AddScoped<IFuelService, FuelService>();
+builder.Services.AddScoped<IAssetDailyCheckService, AssetDailyCheckService>();
+
 
 // ✅ Razor ve Blazor ayarları
 builder.Services.AddRazorPages();

@@ -1,0 +1,94 @@
+@page "/bakim/gunluk-kontrol-detay/{Id:int}"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<ApplicationDbContext> ContextFactory
+@inject NavigationManager Nav
+
+<h3 class="mb-3">Günlük Kontrol Detayı</h3>
+
+@if (record == null)
+{
+    <div class="alert alert-warning">Kayıt bulunamadı.</div>
+}
+else
+{
+    <div class="card shadow-sm p-3">
+        <h5>@record.Asset?.Name</h5>
+        <p class="text-muted">Tarih: @record.CheckDate.ToString("dd.MM.yyyy")</p>
+
+        <dl class="row">
+            <dt class="col-sm-3">Operatör</dt>
+            <dd class="col-sm-9">@record.User?.FullName</dd>
+
+            <dt class="col-sm-3">KM / Saat</dt>
+            <dd class="col-sm-9">@record.Km / @record.HourMeter</dd>
+
+            <dt class="col-sm-3">Genel Not</dt>
+            <dd class="col-sm-9">@record.GeneralNotes</dd>
+        </dl>
+
+        <hr />
+
+        <h5>Teknik Kontroller</h5>
+        <table class="table table-sm table-bordered">
+            <thead><tr><th>Kontrol</th><th>Durum</th><th>Açıklama</th></tr></thead>
+            <tbody>
+                @foreach (var kv in GetCheckItems())
+                {
+                    <tr>
+                        <td>@kv.Label</td>
+                        <td>@(kv.IsOk ? "✅ Uygun" : "❌ Sorunlu")</td>
+                        <td>@kv.Notes</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (record.HasFault == true)
+        {
+            <div class="alert alert-danger">
+                <strong>Arıza:</strong> @record.FaultDescription
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(record.PhotoPath))
+        {
+            <div class="mt-3">
+                <img src="@record.PhotoPath" alt="Fotoğraf" class="img-fluid rounded" style="max-width:400px;" />
+            </div>
+        }
+
+        <div class="mt-3">
+            <button class="btn btn-secondary" @onclick="GeriDon">Geri Dön</button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private AssetDailyCheck? record;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await ContextFactory.CreateDbContextAsync();
+        record = await db.AssetDailyChecks
+            .Include(x => x.Asset)
+            .Include(x => x.User)
+            .FirstOrDefaultAsync(x => x.Id == Id);
+    }
+
+    private IEnumerable<(string Label, bool IsOk, string? Notes)> GetCheckItems()
+    {
+        if (record == null) yield break;
+        yield return ("Motor Yağı", record.EngineOilOk == true, record.EngineOilNotes);
+        yield return ("Hidrolik Yağı", record.HydraulicOilOk == true, record.HydraulicOilNotes);
+        yield return ("Soğutma Suyu", record.CoolantOk == true, record.CoolantNotes);
+        yield return ("Lastik Durumu", record.TireConditionOk == true, record.TireNotes);
+        yield return ("Farlar", record.LightsOk == true, record.LightsNotes);
+        yield return ("Korna", record.HornOk == true, record.HornNotes);
+        yield return ("Emniyet Donanımları", record.SafetyEquipmentsOk == true, record.SafetyEquipmentsNotes);
+    }
+
+    private void GeriDon() => Nav.NavigateTo("/bakim/gunluk-kontroller");
+}

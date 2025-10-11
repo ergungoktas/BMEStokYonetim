@@ -1,0 +1,104 @@
+@page "/bakim/gunluk-kontrol-takvim"
+@using BMEStokYonetim.Data
+@using BMEStokYonetim.Data.Entities
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<ApplicationDbContext> ContextFactory
+
+<h3 class="mb-3">Günlük Kontrol Takvimi</h3>
+
+<div class="d-flex align-items-center gap-2 mb-3">
+    <button class="btn btn-outline-secondary" @onclick="OncekiAy">Önceki</button>
+    <h5>@currentMonth.ToString("MMMM yyyy")</h5>
+    <button class="btn btn-outline-secondary" @onclick="SonrakiAy">Sonraki</button>
+</div>
+
+<table class="table table-bordered text-center align-middle">
+    <thead>
+        <tr>
+            @foreach (var dayName in new[] { "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz" })
+            {
+                <th>@dayName</th>
+            }
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var week in weeks)
+        {
+            <tr>
+                @foreach (var day in week)
+                {
+                    if (day == null)
+                    {
+                        <td></td>
+                    }
+                    else
+                    {
+                        var status = checks.Contains(day.Value);
+                        <td class="@GetClass(status)">
+                            <div>@day.Value.Day</div>
+                        </td>
+                    }
+                }
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private DateTime currentMonth = new(DateTime.Now.Year, DateTime.Now.Month, 1);
+    private List<DateOnly> checks = new();
+    private List<List<DateOnly?>> weeks = new();
+
+    protected override async Task OnInitializedAsync() => await LoadMonth();
+
+    private async Task LoadMonth()
+    {
+        await using var db = await ContextFactory.CreateDbContextAsync();
+        var start = new DateOnly(currentMonth.Year, currentMonth.Month, 1);
+        var end = start.AddMonths(1).AddDays(-1);
+        checks = await db.AssetDailyChecks
+            .Where(x => x.CheckDate >= start && x.CheckDate <= end)
+            .Select(x => x.CheckDate)
+            .Distinct()
+            .ToListAsync();
+
+        BuildCalendar(start);
+    }
+
+    private void BuildCalendar(DateOnly start)
+    {
+        weeks.Clear();
+        var firstDay = (int)start.DayOfWeek;
+        if (firstDay == 0) firstDay = 7; // pazarı sona at
+        var daysInMonth = DateTime.DaysInMonth(start.Year, start.Month);
+        var dayCounter = 1 - (firstDay - 1);
+
+        for (int i = 0; i < 6; i++)
+        {
+            var week = new List<DateOnly?>();
+            for (int j = 1; j <= 7; j++)
+            {
+                if (dayCounter < 1 || dayCounter > daysInMonth)
+                    week.Add(null);
+                else
+                    week.Add(new DateOnly(start.Year, start.Month, dayCounter));
+                dayCounter++;
+            }
+            weeks.Add(week);
+        }
+    }
+
+    private string GetClass(bool done) => done ? "bg-success text-white rounded-circle" : "bg-light";
+
+    private async Task OncekiAy()
+    {
+        currentMonth = currentMonth.AddMonths(-1);
+        await LoadMonth();
+    }
+
+    private async Task SonrakiAy()
+    {
+        currentMonth = currentMonth.AddMonths(1);
+        await LoadMonth();
+    }
+}

@@ -52,7 +52,7 @@ else
             <div class="card shadow-sm">
                 <div class="card-body text-center">
                     <h6 class="text-muted">Devam Eden</h6>
-                    <span class="display-6 text-warning">@filteredMaintenances.Count(m => m.Status == BakimDurumu.MaintenanceInProgress)</span>
+                    <span class="display-6 text-warning">@filteredMaintenances.Count(m => m.Status == BakimDurumu.BakimBasladi || m.Status == BakimDurumu.BakimDevamEdiyor)</span>
                 </div>
             </div>
         </div>
@@ -60,7 +60,7 @@ else
             <div class="card shadow-sm">
                 <div class="card-body text-center">
                     <h6 class="text-muted">Tamamlanan</h6>
-                    <span class="display-6 text-success">@filteredMaintenances.Count(m => m.Status == BakimDurumu.MaintenanceCompleted)</span>
+                    <span class="display-6 text-success">@filteredMaintenances.Count(m => m.Status == BakimDurumu.BakimTamamlandi || m.Status == BakimDurumu.TeslimEdildi)</span>
                 </div>
             </div>
         </div>
@@ -117,8 +117,8 @@ else
                             <span class="badge @GetStatusBadgeClass(maintenance.Status)">@maintenance.Status.GetDescription()</span>
                         </td>
                         <td>@maintenance.RequestDate.ToLocalTime().ToString("dd.MM.yyyy")</td>
-                        <td>@(maintenance.PlannedDate.HasValue ? maintenance.PlannedDate.Value.ToLocalTime().ToString("dd.MM.yyyy") : "-")</td>
-                        <td>@(maintenance.EndDate.HasValue ? maintenance.EndDate.Value.ToLocalTime().ToString("dd.MM.yyyy") : "-")</td>
+                        <td>@(maintenance.PlannedDate.HasValue? maintenance.PlannedDate.Value.ToLocalTime().ToString("dd.MM.yyyy") : "-")</td>
+                        <td>@(maintenance.EndDate.HasValue? maintenance.EndDate.Value.ToLocalTime().ToString("dd.MM.yyyy") : "-")</td>
                         <td class="text-end">@maintenance.TotalCost.ToString("C2", CultureInfo.GetCultureInfo("tr-TR"))</td>
                         <td class="text-end">
                             <button class="btn btn-sm btn-outline-primary" @onclick="() => NavigateToMaintenanceDetail(maintenance.Id)">
@@ -133,7 +133,7 @@ else
 }
 
 @code {
-    private List<Maintenance> maintenances = new();
+    private List<Maintenance> maintenances = [];
     private bool isLoading;
     private BakimDurumu? selectedStatus;
 
@@ -191,9 +191,16 @@ else
 
     private static string GetStatusBadgeClass(BakimDurumu status) => status switch
     {
-        BakimDurumu.MaintenancePlanned => "bg-warning text-dark",
-        BakimDurumu.MaintenanceInProgress => "bg-info text-dark",
-        BakimDurumu.MaintenanceCompleted => "bg-success",
+        BakimDurumu.TalepOlusturuldu => "bg-secondary",
+        BakimDurumu.YoneticiOnayiBekliyor => "bg-info",
+        BakimDurumu.BakimPlanlandi => "bg-primary",
+        BakimDurumu.EkipAtandi => "bg-primary",
+        BakimDurumu.BakimBasladi => "bg-warning text-dark",
+        BakimDurumu.BakimDevamEdiyor => "bg-warning text-dark",
+        BakimDurumu.BakimTamamlandi => "bg-success",
+        BakimDurumu.TeslimEdildi => "bg-success",
+        BakimDurumu.YoneticiReddi => "bg-danger",
+        BakimDurumu.IptalEdildi => "bg-dark",
         _ => "bg-secondary"
     };
 }

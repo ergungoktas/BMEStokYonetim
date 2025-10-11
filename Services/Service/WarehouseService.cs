@@ -14,8 +14,38 @@ namespace BMEStokYonetim.Services.Service
             _context = context;
         }
 
+        // ===========================
+        // 🔹 Yeni Eklenen Metod
+        // ===========================
+        /// <summary>
+        /// Belirli bir depoda, belirli bir ürünün kullanılabilir (AvailableQuantity) miktarını döner.
+        /// Eğer stok kaydı yoksa 0 döner.
+        /// </summary>
+        public async Task<int> GetAvailableQuantityAsync(int warehouseId, int productId)
+        {
+            WarehouseStock? stock = await _context.WarehouseStocks
+                .AsNoTracking()
+                .FirstOrDefaultAsync(ws => ws.WarehouseId == warehouseId && ws.ProductId == productId);
+
+            return stock?.AvailableQuantity ?? 0;
+        }
+
+        // ===========================
+        // 🔸 Mevcut Metodlar
+        // ===========================
         public async Task<int> CreateWarehouseAsync(Warehouse warehouse)
         {
+            if (warehouse.Type == WarehouseType.MainDepot)
+            {
+                bool exists = await _context.Warehouses
+                    .AnyAsync(w => w.Type == WarehouseType.MainDepot && w.Id != warehouse.Id);
+
+                if (exists)
+                {
+                    throw new InvalidOperationException("Sistemde yalnızca bir Ana Depo (Main Depot) tanımlanabilir.");
+                }
+            }
+
             _ = _context.Warehouses.Add(warehouse);
             _ = await _context.SaveChangesAsync();
             return warehouse.Id;
@@ -53,7 +83,10 @@ namespace BMEStokYonetim.Services.Service
             if (stock == null)
             {
                 if (quantity < 0)
-                { throw new InvalidOperationException("Yetersiz stok"); }
+                {
+                    throw new InvalidOperationException("Yetersiz stok");
+                }
+
                 stock = new WarehouseStock
                 {
                     WarehouseId = warehouseId,
@@ -67,7 +100,10 @@ namespace BMEStokYonetim.Services.Service
             {
                 stock.Quantity += quantity;
                 if (stock.Quantity < 0)
-                { throw new InvalidOperationException("Yetersiz stok"); }
+                {
+                    throw new InvalidOperationException("Yetersiz stok");
+                }
+
                 stock.LastUpdated = DateTime.UtcNow;
             }
 
@@ -157,5 +193,20 @@ namespace BMEStokYonetim.Services.Service
                 AlertType = ws.Quantity == 0 ? "OutOfStock" : "LowStock"
             }).ToList();
         }
+        public async Task AddWarehouseAsync(Warehouse warehouse)
+        {
+            if (warehouse.Type == WarehouseType.MainDepot)
+            {
+                bool exists = await _context.Warehouses.AnyAsync(w => w.Type == WarehouseType.MainDepot && w.Id != warehouse.Id);
+                if (exists)
+                {
+                    throw new InvalidOperationException("Sistemde sadece bir Ana Depo olabilir.");
+                }
+            }
+
+            _ = _context.Warehouses.Add(warehouse);
+            _ = await _context.SaveChangesAsync();
+        }
+
     }
 }

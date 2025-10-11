@@ -133,9 +133,10 @@ else
             await using var db = await ContextFactory.CreateDbContextAsync();
 
             warehouses = await db.Warehouses
-                .Where(w => w.IsActive)
-                .OrderBy(w => w.Code)
-                .ToListAsync();
+            .Where(w => w.IsActive && w.Type == WarehouseType.MainDepot)
+            .OrderBy(w => w.Code)
+            .ToListAsync();
+
 
             products = await db.Products
                 .Where(p => p.IsActive)
@@ -207,7 +208,7 @@ else
                 AssetId = model.AssetId,
                 Km = model.Km,
                 HourMeter = model.HourMeter,
-                Unit = product.Unit.ToString()
+                Unit = product.Unit
             };
 
             db.StockMovements.Add(movement);

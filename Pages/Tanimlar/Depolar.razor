@@ -8,6 +8,15 @@
 
 <h3>Depo Yönetimi</h3>
 
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+@if (!string.IsNullOrEmpty(success))
+{
+    <div class="alert alert-success">@success</div>
+}
+
 <EditForm Model="@model" OnValidSubmit="HandleValidSubmit">
     <DataAnnotationsValidator />
     <ValidationSummary />
@@ -36,7 +45,7 @@
     <div class="mb-3">
         <label class="form-label">Depo Tipi</label>
         <InputSelect class="form-select" @bind-Value="model.Type">
-            @foreach (var value in Enum.GetValues(typeof(WarehouseType)))
+            @foreach (WarehouseType value in Enum.GetValues(typeof(WarehouseType)))
             {
                 <option value="@value">@value</option>
             }
@@ -49,13 +58,14 @@
 <hr />
 
 <h5>Mevcut Depolar</h5>
-<table class="table table-bordered">
+<table class="table table-bordered table-striped">
     <thead>
         <tr>
             <th>Kod</th>
             <th>Ad</th>
             <th>Tip</th>
             <th>Lokasyon</th>
+            <th>Durum</th>
             <th>İşlem</th>
         </tr>
     </thead>
@@ -67,6 +77,7 @@
                 <td>@depo.Name</td>
                 <td>@depo.Type</td>
                 <td>@depo.Location?.Name</td>
+                <td>@(depo.IsActive ? "Aktif" : "Pasif")</td>
                 <td>
                     <button class="btn btn-sm btn-primary" @onclick="() => EditWarehouse(depo)">Düzenle</button>
                 </td>
@@ -79,6 +90,8 @@
     private Warehouse model = new();
     private List<Location> lokasyonlar = new();
     private List<Warehouse> depolar = new();
+    private string? error;
+    private string? success;
 
     private int? selectedLocationId
     {
@@ -95,13 +108,17 @@
 
     protected override async Task OnInitializedAsync()
     {
-        lokasyonlar = await _context.Locations.OrderBy(l => l.Name).ToListAsync();
+        lokasyonlar = await _context.Locations
+            .AsNoTracking()
+            .OrderBy(l => l.Name)
+            .ToListAsync();
+
         await LoadDepolar();
     }
 
     private async Task GenerateCodeFromLocation()
     {
-        if (model.Id > 0) return; // düzenleme modundaysa yeni kod üretme
+        if (model.Id > 0) return;
         if (model.LocationId == null) return;
 
         var lokasyon = lokasyonlar.FirstOrDefault(l => l.Id == model.LocationId);
@@ -113,6 +130,7 @@
             .ToArray()).ToUpper();
 
         var benzerKodlar = await _context.Warehouses
+            .AsNoTracking()
             .Where(w => w.Code.StartsWith(kodPrefix))
             .Select(w => w.Code)
             .ToListAsync();
@@ -132,16 +150,37 @@
 
     private async Task HandleValidSubmit()
     {
+        error = success = null;
+
+        // 🔹 Sadece 1 Ana Depo olmasına izin ver
+        if (model.Type == WarehouseType.MainDepot)
+        {
+            bool exists = await _context.Warehouses
+                .AnyAsync(w => w.Type == WarehouseType.MainDepot && w.Id != model.Id);
+
+            if (exists)
+            {
+                error = "Sistemde yalnızca bir Ana Depo tanımlanabilir.";
+                return;
+            }
+        }
+
         if (model.Id == 0)
         {
             _context.Warehouses.Add(model);
         }
         else
         {
+            var local = _context.Warehouses.Local.FirstOrDefault(w => w.Id == model.Id);
+            if (local != null)
+            {
+                _context.Entry(local).State = EntityState.Detached;
+            }
             _context.Warehouses.Update(model);
         }
 
         await _context.SaveChangesAsync();
+        success = (model.Id == 0) ? "Depo eklendi." : "Depo güncellendi.";
         model = new Warehouse();
         await LoadDepolar();
         StateHasChanged();
@@ -150,6 +189,7 @@
     private async Task LoadDepolar()
     {
         depolar = await _context.Warehouses
+            .AsNoTracking()
             .Include(w => w.Location)
             .OrderBy(w => w.Code)
             .ToListAsync();
@@ -163,7 +203,8 @@
             Code = depo.Code,
             Name = depo.Name,
             Type = depo.Type,
-            LocationId = depo.LocationId
+            LocationId = depo.LocationId,
+            IsActive = depo.IsActive
         };
     }
 }

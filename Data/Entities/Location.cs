@@ -10,7 +10,7 @@ namespace BMEStokYonetim.Data.Entities
         public int Id { get; set; }
         [Required, StringLength(100)]
         public string Name { get; set; } = string.Empty;
-        public bool IsMainDepot { get; set; } = false; // Yeni alan
+
         [StringLength(255)]
         public string? Description { get; set; }
 

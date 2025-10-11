@@ -44,6 +44,10 @@ namespace BMEStokYonetim.Services.Service
                     throw new InvalidOperationException("Ana depo bulunamadı.");
                 }
 
+                // 🟢 Stokta rezervasyon ayır
+                await _warehouseService.ReserveStockAsync(mainWarehouse.Id, requestItem.ProductId, quantity);
+
+                // 🟢 Rezervasyon kaydı oluştur
                 StockReservation reservation = new()
                 {
                     RequestItemId = requestItemId,
@@ -58,6 +62,7 @@ namespace BMEStokYonetim.Services.Service
 
                 _ = _context.StockReservations.Add(reservation);
                 _ = await _context.SaveChangesAsync();
+
                 await transaction.CommitAsync();
 
                 _logger.LogInformation("[AUTO] Rezervasyon oluşturuldu: {Product} - {Quantity} adet", requestItem.Product.Name, quantity);
@@ -93,6 +98,10 @@ namespace BMEStokYonetim.Services.Service
                     throw new InvalidOperationException("Ana depo bulunamadı.");
                 }
 
+                // 🟢 Stokta rezervasyon ayır
+                await _warehouseService.ReserveStockAsync(mainWarehouse.Id, requestItem.ProductId, quantity);
+
+                // 🟢 Rezervasyon kaydı oluştur
                 StockReservation reservation = new()
                 {
                     RequestItemId = requestItemId,
@@ -164,6 +173,7 @@ namespace BMEStokYonetim.Services.Service
                 reservation.IsActive = false;
                 reservation.ReleasedAt = DateTime.UtcNow;
 
+                // 🟢 Depodaki rezervasyonu çöz
                 await _warehouseService.ReleaseReservationAsync(
                     reservation.WarehouseId,
                     reservation.ProductId,

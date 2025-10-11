@@ -4,6 +4,26 @@
 /// Satın Alma Talep Durumları
 /// </summary>
 /// 
+public enum BakimTuru
+{
+    [Description("Periyodik Bakım")]
+    PeriyodikBakim = 1,
+
+    [Description("Arıza Onarımı")]
+    ArizaOnarimi = 2,
+
+    [Description("Önleyici Bakım")]
+    OnleyiciBakim = 3,
+
+    [Description("Revizyon")]
+    Revizyon = 4,
+
+    [Description("Modifikasyon")]
+    Modifikasyon = 5,
+
+    [Description("Acil Onarım")]
+    AcilOnarim = 6
+}
 public enum CurrencyType
 {
     [Description("Türk Lirası (₺)")]
@@ -110,17 +130,66 @@ public enum TalepDurumu
 }
 public enum BakimDurumu
 {
-    [Description("Bakım planlandı")]
-    MaintenancePlanned = 1,
+    [Description("Talep Oluşturuldu")]
+    TalepOlusturuldu = 0,
 
-    [Description("Bakım devam ediyor")]
-    MaintenanceInProgress = 2,
+    [Description("Yönetici Onayı Bekliyor")]
+    YoneticiOnayiBekliyor = 1,
 
-    [Description("Bakım tamamlandı")]
-    MaintenanceCompleted = 3
+    [Description("Yönetici Tarafından Reddedildi")]
+    YoneticiReddi = 2,
+
+    [Description("Bakım Planlandı")]
+    BakimPlanlandi = 3,
+
+    [Description("Ekip Atandı")]
+    EkipAtandi = 4,
+
+    [Description("Bakım Başladı")]
+    BakimBasladi = 5,
+
+    [Description("Parça Bekleniyor")]
+    ParcaBekleniyor = 6,
+
+    [Description("Bakım Devam Ediyor")]
+    BakimDevamEdiyor = 7,
+
+    [Description("Bakım Tamamlandı")]
+    BakimTamamlandi = 8,
+
+    [Description("Test Ediliyor")]
+    TestEdiliyor = 9,
+
+    [Description("Teslim Edildi")]
+    TeslimEdildi = 10,
+
+    [Description("Yeniden Açıldı")]
+    YenidenAcildi = 11,
+
+    [Description("İptal Edildi")]
+    IptalEdildi = 12
+}
+public enum BakimOncelik
+{
+    [Description("Düşük")]
+    Dusuk = 1,
+
+    [Description("Normal")]
+    Normal = 2,
+
+    [Description("Yüksek")]
+    Yuksek = 3,
+
+    [Description("Acil")]
+    Acil = 4,
+
+    [Description("Kritik")]
+    Kritik = 5
 }
 public enum RezervasyonDurumu
 {
+    [Description("Talep edildi")]
+    RequestCreated = 0,
     [Description("Rezervasyon aktif")]
     ReservationActive = 1,
 
@@ -145,9 +214,32 @@ public enum WarehouseType
     MainDepot = 1,
 
     [Description("Mobil Depo")]
-    MobileDepot = 2
-}
+    MobileDepot = 2,
 
+    [Description("Diğer")]
+    Other = 3
+}
+public enum FaultCategory
+{
+    [Description("Motor")]
+    Engine = 1,
+    [Description("Hidrolik")]
+    Hydraulic = 2,
+    [Description("Elektrik")]
+    Electrical = 3,
+    [Description("Şanzıman")]
+    Transmission = 4,
+    [Description("Fren Sistemi")]
+    BrakeSystem = 5,
+    [Description("Soğutma Sistemi")]
+    CoolingSystem = 6,
+    [Description("Elektronik Sistemi")]
+    Electronic = 7,
+    [Description("Şase/Kasa v.b")]
+    Chassis = 8,
+    [Description("Diğer")]
+    Other = 9
+}
 // NOT: Description niteliğindeki metni okumak isterseniz,
 // aşağıdaki gibi bir yardımcı (extension) metot kullanmanız gerekir.
 

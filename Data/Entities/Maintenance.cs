@@ -14,7 +14,7 @@ namespace BMEStokYonetim.Data.Entities
         public int? FaultCodeId { get; set; }
         public FaultCode? FaultCode { get; set; }
 
-        public BakimDurumu Status { get; set; } = BakimDurumu.MaintenancePlanned;
+        public BakimDurumu Status { get; set; } = BakimDurumu.TalepOlusturuldu;
 
         [MaxLength(500)]
         public string Description { get; set; } = string.Empty;

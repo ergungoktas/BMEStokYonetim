@@ -98,8 +98,8 @@
             {
                 Id = u.Id,
                 FullName = u.FullName,
-                Email = u.Email,
-                Role = userRoles.FirstOrDefault() ?? "",
+                Email = u.Email ?? string.Empty,
+                Role = userRoles.FirstOrDefault() ?? string.Empty,
             });
         }
     }

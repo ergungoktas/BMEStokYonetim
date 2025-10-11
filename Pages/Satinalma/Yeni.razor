@@ -19,7 +19,6 @@
     <div class="alert alert-success">@successMessage</div>
 }
 
-<!-- 🔹 Lokasyon seçimi -->
 <div class="mb-3">
     <label class="form-label fw-bold">Lokasyon Seçin:</label>
     <div class="d-flex flex-wrap gap-2">
@@ -35,7 +34,6 @@
 
 @if (selectedLocationId != null)
 {
-    <!-- 🔹 Satınalma Kalemleri -->
     <div class="card mt-3 p-3">
         <h5>1️⃣ Satınalma Kalemleri (Detay Bilgiler)</h5>
 
@@ -92,8 +90,11 @@
             </table>
 
             <div class="text-end fw-bold">
-                Genel Toplam: @selectedItems.Sum(i => i.TotalPrice).ToString("N2") 
-                @if (selectedItems.Any()) { @selectedItems.First().Currency }
+                Genel Toplam: @selectedItems.Sum(i => i.TotalPrice).ToString("N2")
+                @if (selectedItems.Any())
+                {
+                    @selectedItems.First().Currency
+                }
             </div>
 
             <div class="mt-3">
@@ -112,7 +113,6 @@
         }
     </div>
 
-    <!-- 🔹 Yönetim Onaylı Talepler -->
     <div class="card mt-4 p-3">
         <h5>2️⃣ Yönetim Onaylı Talepler</h5>
 
@@ -180,7 +180,8 @@
             .Include(i => i.Product)
             .Include(i => i.Request)
             .Where(i =>
-                i.Request!.LocationId == locId &&
+                i.Request != null &&
+                i.Request.LocationId == locId &&
                 i.Status == TalepDurumu.Approved &&
                 i.ApprovalStage == OnayAsamasi.ManagementApproved)
             .Select(i => new RequestItemSelectable
@@ -219,15 +220,16 @@
             return;
         }
 
-        string userId = await userContextService.GetCurrentUserIdAsync();
-        string purchaseNumber = await purchaseService.GeneratePurchaseNumberAsync(selectedLocationId!.Value);
+        var userId = await userContextService.GetCurrentUserIdAsync();
+        var locationId = selectedLocationId ?? 0;
+        var purchaseNumber = await purchaseService.GeneratePurchaseNumberAsync(locationId);
 
         var purchase = new Purchase
         {
             PurchaseNumber = purchaseNumber,
             PurchaseDate = DateTime.UtcNow,
             CreatedByUserId = userId,
-            LocationId = selectedLocationId!.Value,
+            LocationId = locationId,
             Description = purchaseDescription ?? string.Empty
         };
 
@@ -242,10 +244,10 @@
                 ProductId = item.ProductId,
                 Quantity = item.RequestedQuantity,
                 RequestItemId = item.Id,
-                SupplierId = item.SupplierId!.Value,
+                SupplierId = item.SupplierId ?? 0,
                 UnitPrice = item.UnitPrice,
                 Currency = item.Currency,
-                DeliveryDate = item.DeliveryDate
+                DeliveryDate = item.DeliveryDate ?? DateTime.UtcNow
             });
 
             var reqItem = await _context.RequestItems.FindAsync(item.Id);

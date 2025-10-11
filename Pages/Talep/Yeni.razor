@@ -85,7 +85,7 @@
                         <td>@item.RequestedQuantity</td>
                         <td>@item.Description</td>
                         <td>
-                            <button type="button" class="btn btn-danger btn-sm" @onclick="() => RemoveItem(item)">Sil</button>
+                            <button type="button" class="btn btn-danger btn-sm" @onclick="(() => RemoveItem(item))">Sil</button>
                         </td>
                     </tr>
                 }
@@ -103,7 +103,6 @@
         <h6>Yeni Kalem Ekle</h6>
 
         <div class="row g-2 align-items-end">
-            <!-- Ürün -->
             <div class="col-md-4">
                 <label class="form-label">Ürün</label>
                 <select class="form-select"
@@ -117,16 +116,14 @@
                 </select>
             </div>
 
-            <!-- Miktar -->
             <div class="col-md-3">
                 <label class="form-label">Miktar</label>
                 <InputNumber class="form-control"
-                               TValue="int"
-                               @bind-Value="newItemQuantity"
-                               placeholder="@GetQuantityPlaceholder()" />
+                             TValue="int"
+                             @bind-Value="newItemQuantity"
+                             placeholder="@GetQuantityPlaceholder()" />
             </div>
 
-            <!-- Birim -->
             @if (!string.IsNullOrWhiteSpace(selectedUnit))
             {
                 <div class="col-md-2">
@@ -137,13 +134,11 @@
                 </div>
             }
 
-            <!-- Açıklama -->
             <div class="col-md-2">
                 <label class="form-label">Açıklama</label>
                 <InputText class="form-control" @bind-Value="newItemDescription" />
             </div>
 
-            <!-- Ekle -->
             <div class="col-md-1 d-grid">
                 <button type="button" class="btn btn-primary"
                         @onclick="AddItem"
@@ -193,7 +188,8 @@
             .ToListAsync();
 
         request.RequestDate = DateTime.UtcNow;
-        request.RequestedByUserId = await userContextService.GetCurrentUserIdAsync();
+        request.RequestedByUserId = await userContextService.GetCurrentUserIdAsync() ?? string.Empty;
+
     }
 
     private async Task OnLocationChanged(ChangeEventArgs e)
@@ -279,7 +275,7 @@
             ProductId = product.Id,
             Product = product,
             RequestedQuantity = newItemQuantity,
-            Description = newItemDescription,
+            Description = newItemDescription ?? string.Empty,
             TargetWarehouseId = request.WarehouseId
         });
 
@@ -342,11 +338,11 @@
             return;
         }
 
-        // Formu temizle
         request = new Request
         {
             RequestDate = DateTime.UtcNow,
-            RequestedByUserId = await userContextService.GetCurrentUserIdAsync()
+            RequestedByUserId = await userContextService.GetCurrentUserIdAsync() ?? string.Empty
+
         };
         selectedLocationId = null;
         warehouses.Clear();
